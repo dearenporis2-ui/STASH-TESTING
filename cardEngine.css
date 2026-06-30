@@ -1,0 +1,185 @@
+/* ═══════════════════════════════════════════════════════
+   STASH CARD ENGINE — multi-layer skin renderer
+   Every visual is driven by CSS custom properties set
+   inline by cardEngine.js from a Firestore skin document.
+═══════════════════════════════════════════════════════ */
+
+.stash-card-engine {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--card-radius, 16px);
+  overflow: visible; /* critical — lets breakout layer bleed */
+  isolation: isolate;
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+
+.stash-card-engine:hover,
+.stash-card-engine:focus-within {
+  z-index: 50; /* lift above neighbors so breakout art isn't clipped by sibling stacking */
+}
+
+/* ── LAYER 1 — Background FX (glow, gradient shift) ── */
+.sce-layer-bg {
+  position: absolute;
+  inset: -20%;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  opacity: var(--glow-intensity, 0.3);
+  background: radial-gradient(
+    ellipse 70% 70% at 50% 50%,
+    var(--glow-color, #D4A017) 0%,
+    transparent 70%
+  );
+  filter: blur(20px);
+  transform: scale(var(--bg-scale, 1));
+  animation: sce-breathe var(--glow-speed, 3.5s) ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes sce-breathe {
+  0%, 100% { transform: scale(1); opacity: var(--glow-intensity, 0.3); }
+  50%      { transform: scale(1.08); opacity: calc(var(--glow-intensity, 0.3) * 1.4); }
+}
+
+/* ── LAYER 2 — Asset Core (item photo) ── */
+.sce-layer-asset {
+  position: absolute;
+  inset: var(--asset-inset, 8%);
+  border-radius: var(--asset-radius, 10px);
+  overflow: hidden;
+  z-index: 2;
+  background: rgba(255,255,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+}
+.sce-layer-asset img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+/* ── LAYER 3 — Frame Overlay (border/skin sitting on margins) ── */
+.sce-layer-frame {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  border: var(--frame-width, 2px) solid var(--frame-color, rgba(255,255,255,0.1));
+  box-shadow:
+    0 0 var(--frame-shadow-blur, 0px) var(--frame-shadow-spread, 0px) var(--glow-color, transparent),
+    inset 0 1px 0 var(--frame-inner-highlight, transparent);
+  background: var(--frame-texture, none);
+  background-size: cover;
+  opacity: var(--frame-opacity, 1);
+}
+
+/* Animated shifting gradient frame (for holo/iridescent tiers) */
+.sce-layer-frame.sce-frame-animated {
+  background: linear-gradient(
+    var(--frame-gradient-angle, 120deg),
+    var(--frame-color-1, #D4A017),
+    var(--frame-color-2, #6ee7f7),
+    var(--frame-color-3, #a855f7),
+    var(--frame-color-1, #D4A017)
+  );
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: var(--frame-width, 2px);
+  animation: sce-gradient-shift var(--gradient-speed, 6s) ease infinite;
+  will-change: transform;
+}
+
+@keyframes sce-gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ── LAYER 4 — Breakout / Bleed FX (escapes the box) ── */
+.sce-layer-breakout {
+  position: absolute;
+  inset: 0;
+  overflow: visible; /* the whole point — children can exceed parent bounds */
+  pointer-events: none;
+  z-index: 4;
+  display: none; /* only enabled for tiers that use it */
+}
+.stash-card-engine[data-tier="mythic"] .sce-layer-breakout,
+.stash-card-engine[data-tier="legendary"] .sce-layer-breakout {
+  display: block;
+}
+
+.sce-breakout-element {
+  position: absolute;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* Spike preset — radiating triangular shapes around the card edge */
+.sce-breakout-spikes {
+  position: absolute;
+  inset: calc(var(--breakout-offset, 20px) * -1);
+  background: var(--breakout-texture, none);
+  opacity: var(--breakout-opacity, 0.85);
+  transform: scale(var(--breakout-scale, 1)) rotate(var(--bleed-rotation, 0deg));
+  filter: drop-shadow(0 0 12px var(--glow-color, transparent));
+  animation: sce-breakout-pulse var(--breakout-speed, 4s) ease-in-out infinite;
+}
+
+@keyframes sce-breakout-pulse {
+  0%, 100% { transform: scale(var(--breakout-scale, 1)) rotate(var(--bleed-rotation, 0deg)); }
+  50%      { transform: scale(calc(var(--breakout-scale, 1) * 1.05)) rotate(var(--bleed-rotation, 0deg)); }
+}
+
+/* Particle canvas sits in the breakout layer for mythic tiers */
+.sce-particle-canvas {
+  position: absolute;
+  inset: calc(var(--breakout-offset, 20px) * -1.5);
+  pointer-events: none;
+}
+
+/* ── LAYER 5 — Metadata Footer ── */
+.sce-layer-footer {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 5;
+  padding: 10px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+  border-radius: 0 0 inherit inherit;
+}
+.sce-footer-name {
+  font-size: 12px; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sce-footer-value {
+  font-size: 13px; font-weight: 800; color: var(--glow-color, #D4A017);
+}
+
+/* ── Tier badge (small corner ribbon) ── */
+.sce-tier-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  z-index: 6;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--badge-bg, rgba(212,160,23,0.15));
+  border: 1px solid var(--badge-border, rgba(212,160,23,0.4));
+  color: var(--badge-color, #D4A017);
+  pointer-events: none;
+}
+
+/* ── Reduced motion respect ── */
+@media (prefers-reduced-motion: reduce) {
+  .sce-layer-bg, .sce-layer-frame.sce-frame-animated,
+  .sce-breakout-spikes { animation: none !important; }
+}
