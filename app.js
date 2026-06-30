@@ -6,6 +6,10 @@
 import { auth, db } from './firebase.js';
 import { openUploadWidget } from './cloudinary.js';
 import {
+  startSkinSync, getSkin, getAllSkins, saveSkin, deleteSkin,
+  applySkinToElement, renderCardHTML, mountCard, DEFAULT_SKIN
+} from './cardEngine.js';
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -199,6 +203,7 @@ function initApp() {
   loadMarketplace();
   loadLeaderboard();
   startCountdown();
+  startSkinSync(); // every user gets live access to admin-published skins (read-only)
 }
 
 function updateUserUI() {
@@ -796,7 +801,41 @@ function openListingModal() {
   document.querySelector('#listingModal .modal-title').textContent = 'List an Item';
   document.querySelector('#listingModal .modal-btn').textContent = 'List Item ✦';
   refreshFrameDropdownOwnership();
+  populateCustomSkinsInDropdown();
   document.getElementById('listingModal').classList.add('open');
+}
+
+// Injects admin-created custom skins (from cardSkins collection) into the
+// Card Frame dropdown, below the 5 built-in frames, so listing an item
+// always offers whatever the admin has published — live, no app update needed.
+function populateCustomSkinsInDropdown() {
+  const dropdown = document.getElementById('csFrameDropdown');
+  if (!dropdown) return;
+  // Clear any previously injected custom options first
+  dropdown.querySelectorAll('.cs-option[data-custom-skin]').forEach(el => el.remove());
+
+  const customSkins = getAllSkins().filter(s => s.id !== 'default');
+  const owned = currentUserData?.ownedFrames || ['default'];
+
+  customSkins.forEach(s => {
+    const emoji = s.tier === 'mythic' ? '🔥' : s.tier === 'epic' ? '🟣' : s.tier === 'rare' ? '🔷' : '✦';
+    const opt = document.createElement('div');
+    opt.className = 'cs-option';
+    opt.setAttribute('data-custom-skin', s.id);
+    opt.innerHTML = `<span class="cs-opt-icon">${emoji}</span>${escHtml(s.name)}`;
+    opt.onclick = () => { selectCS('csFrame', 'listingFrame', s.id, `${emoji} ${s.name}`); };
+
+    const isOwned = owned.includes(s.id);
+    if (!isOwned) {
+      opt.style.opacity = '0.35';
+      opt.style.pointerEvents = 'none';
+      const badge = document.createElement('span');
+      badge.style.cssText = 'margin-left:auto;font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:3px';
+      badge.innerHTML = '<i class="ti ti-lock" style="font-size:12px"></i> Shop';
+      opt.appendChild(badge);
+    }
+    dropdown.appendChild(opt);
+  });
 }
 
 function refreshFrameDropdownOwnership() {
@@ -879,7 +918,14 @@ async function openEditListing(listingId) {
 
   // Set frame via custom dropdown
   const frameLabels = { default: '⬜ Default (Free)', gold: '🟨 Liquid Gold Frame', holo: '🌈 Holographic Foil', purple: '💜 Royal Purple', carbon: '🖤 Carbon Fiber', neon: '💚 Neon Grid' };
-  selectCS('csFrame', 'listingFrame', l.frame || 'default', frameLabels[l.frame || 'default']);
+  populateCustomSkinsInDropdown();
+  const customSkin = getSkin(l.frame);
+  if (customSkin && customSkin.id === l.frame && l.frame !== 'default' && !frameLabels[l.frame]) {
+    const emoji = customSkin.tier === 'mythic' ? '🔥' : customSkin.tier === 'epic' ? '🟣' : customSkin.tier === 'rare' ? '🔷' : '✦';
+    selectCS('csFrame', 'listingFrame', l.frame, `${emoji} ${customSkin.name}`);
+  } else {
+    selectCS('csFrame', 'listingFrame', l.frame || 'default', frameLabels[l.frame || 'default']);
+  }
   refreshFrameDropdownOwnership();
 
   // Image preview
@@ -1595,10 +1641,199 @@ async function loadAdminData() {
             </div>
           </div>`).join('');
     }
+
+    // Skin sync starts once admin opens the panel — keeps it live everywhere
+    startSkinSync(() => { renderAdminSkinsList(); });
+    initSkinStudioPreview();
+    renderAdminSkinsList();
   } catch (err) { showToast('Admin load error: ' + err.message, 'error'); }
 }
 
 // ═══════════════════════════════════════════
+// ADMIN SUB-TABS
+// ═══════════════════════════════════════════
+function setAdminTab(el, tab) {
+  document.querySelectorAll('#screen-admin .filter-row .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('adminTab-overview').style.display = tab === 'overview' ? 'block' : 'none';
+  document.getElementById('adminTab-skinStudio').style.display = tab === 'skinStudio' ? 'block' : 'none';
+  if (tab === 'skinStudio') {
+    initSkinStudioPreview();
+    renderAdminSkinsList();
+  }
+}
+
+// ═══════════════════════════════════════════
+// SKIN STUDIO — live preview card + editor
+// ═══════════════════════════════════════════
+let editingSkinId = null;
+let previewBgMode = 'dark';
+
+function initSkinStudioPreview() {
+  const mount = document.getElementById('skinPreviewMount');
+  if (!mount) return;
+  mount.innerHTML = renderCardHTML({
+    id: 'preview',
+    name: 'Rolex Daytona',
+    priceLabel: 'SCR 38,500',
+    emoji: '⌚',
+    skinId: 'previewLive'
+  });
+  applyPreviewBgStyle();
+  updatePreview();
+}
+
+function applyPreviewBgStyle() {
+  const mount = document.getElementById('skinPreviewMount');
+  if (!mount) return;
+  if (previewBgMode === 'grid') {
+    mount.style.background = 'repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 24px), #0d0d0f';
+  } else {
+    mount.style.background = 'transparent';
+  }
+  mount.style.padding = '24px';
+  mount.style.borderRadius = '16px';
+}
+
+function setPreviewBg(el, mode) {
+  document.querySelectorAll('#adminTab-skinStudio .filter-row .filter-chip').forEach(c => {
+    if (c.textContent.includes('BG')) c.classList.remove('active');
+  });
+  el.classList.add('active');
+  previewBgMode = mode;
+  applyPreviewBgStyle();
+}
+
+// Reads every control in the Skin Studio form into a flat config object
+function readSkinFormConfig() {
+  const tier = document.getElementById('skinTier').value || 'standard';
+  return {
+    name: document.getElementById('skinName').value.trim() || 'Untitled Skin',
+    tier,
+    badgeLabel: document.getElementById('skinBadgeLabel').value.trim(),
+    glowColor: document.getElementById('skinGlowColor').value,
+    glowIntensity: parseFloat(document.getElementById('skinGlowIntensity').value),
+    glowSpeed: parseFloat(document.getElementById('skinGlowSpeed').value),
+    frameWidth: parseInt(document.getElementById('skinFrameWidth').value),
+    frameColor: document.getElementById('skinFrameColor').value,
+    frameAnimated: document.getElementById('skinFrameAnimated').checked,
+    frameColor1: document.getElementById('skinFrameColor').value,
+    frameColor2: document.getElementById('skinFrameColor2').value,
+    frameColor3: document.getElementById('skinFrameColor3').value,
+    gradientSpeed: 6,
+    breakoutEnabled: tier === 'mythic',
+    breakoutOffset: parseInt(document.getElementById('skinBreakoutOffset').value),
+    breakoutScale: parseFloat(document.getElementById('skinBreakoutScale').value),
+    bleedRotation: parseInt(document.getElementById('skinBleedRotation').value),
+    breakoutSpeed: parseFloat(document.getElementById('skinBreakoutSpeed').value),
+    breakoutOpacity: 0.85,
+    badgeBg: hexToRgba(document.getElementById('skinGlowColor').value, 0.15),
+    badgeBorder: hexToRgba(document.getElementById('skinGlowColor').value, 0.4),
+    badgeColor: document.getElementById('skinGlowColor').value
+  };
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Live-updates every numeric readout label + repaints the preview card —
+// this is the "instant repaint" requirement, driven entirely by reading
+// the form and writing CSS custom properties, no rebuild of the DOM.
+function updatePreview() {
+  setText('valGlowIntensity', document.getElementById('skinGlowIntensity').value);
+  setText('valGlowSpeed', document.getElementById('skinGlowSpeed').value);
+  setText('valFrameWidth', document.getElementById('skinFrameWidth').value);
+  setText('valBreakoutOffset', document.getElementById('skinBreakoutOffset').value);
+  setText('valBreakoutScale', document.getElementById('skinBreakoutScale').value);
+  setText('valBleedRotation', document.getElementById('skinBleedRotation').value);
+  setText('valBreakoutSpeed', document.getElementById('skinBreakoutSpeed').value);
+
+  const config = readSkinFormConfig();
+  const breakoutPanel = document.getElementById('breakoutPanel');
+  if (breakoutPanel) breakoutPanel.style.opacity = config.tier === 'mythic' ? '1' : '0.4';
+
+  const previewEl = document.getElementById('sce-preview');
+  if (previewEl) applySkinToElement(previewEl, config);
+}
+
+async function saveCurrentSkin() {
+  const config = readSkinFormConfig();
+  if (!config.name || config.name === 'Untitled Skin') {
+    return showToast('Give your skin a name first', 'error');
+  }
+  try {
+    const id = await saveSkin(editingSkinId, config);
+    editingSkinId = id;
+    showToast(`"${config.name}" published — live for every user now`, 'success');
+    renderAdminSkinsList();
+  } catch (err) {
+    showToast('Error saving skin: ' + err.message, 'error');
+  }
+}
+
+function renderAdminSkinsList() {
+  const list = document.getElementById('adminSkinsList');
+  if (!list) return;
+  const skins = getAllSkins().filter(s => s.id !== 'default');
+
+  if (skins.length === 0) {
+    list.innerHTML = `<div style="grid-column:span 4;text-align:center;padding:40px;color:var(--text-muted)">No custom skins yet — build one above and publish it.</div>`;
+    return;
+  }
+
+  list.innerHTML = skins.map(s => `
+    <div class="skin-card" style="border-color:${s.badgeBorder || 'var(--glass-border)'}">
+      <div class="skin-preview" style="background:${s.glowColor}22;border:2px solid ${s.glowColor}">${s.tier === 'mythic' ? '🔥' : '✦'}</div>
+      <div class="skin-name">${escHtml(s.name)}</div>
+      <div class="skin-desc">Tier: ${escHtml(s.tier)} ${s.badgeLabel ? '· Badge: ' + escHtml(s.badgeLabel) : ''}</div>
+      <div class="skin-footer">
+        <button class="buy-btn" style="background:var(--glass-gold);color:var(--gold)" onclick="loadSkinIntoStudio('${s.id}')"><i class="ti ti-pencil"></i></button>
+        <button class="buy-btn" style="background:rgba(255,77,77,0.15);color:#ff4d4d" onclick="confirmDeleteSkin('${s.id}','${escHtml(s.name)}')"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`).join('');
+}
+
+function loadSkinIntoStudio(skinId) {
+  const s = getSkin(skinId);
+  if (!s) return;
+  editingSkinId = skinId;
+
+  document.getElementById('skinName').value = s.name || '';
+  document.getElementById('skinBadgeLabel').value = s.badgeLabel || '';
+  document.getElementById('skinGlowColor').value = s.glowColor || '#D4A017';
+  document.getElementById('skinGlowIntensity').value = s.glowIntensity ?? 0.3;
+  document.getElementById('skinGlowSpeed').value = s.glowSpeed ?? 3.5;
+  document.getElementById('skinFrameWidth').value = s.frameWidth ?? 2;
+  document.getElementById('skinFrameColor').value = s.frameColor1 || s.frameColor || '#D4A017';
+  document.getElementById('skinFrameAnimated').checked = !!s.frameAnimated;
+  document.getElementById('skinFrameColor2').value = s.frameColor2 || '#6ee7f7';
+  document.getElementById('skinFrameColor3').value = s.frameColor3 || '#a855f7';
+  document.getElementById('skinBreakoutOffset').value = s.breakoutOffset ?? 20;
+  document.getElementById('skinBreakoutScale').value = s.breakoutScale ?? 1;
+  document.getElementById('skinBleedRotation').value = s.bleedRotation ?? 0;
+  document.getElementById('skinBreakoutSpeed').value = s.breakoutSpeed ?? 4;
+
+  const tierLabels = { standard: '⬜ Standard', rare: '🔷 Rare', epic: '🟣 Epic', mythic: '🔥 Mythic (breakout fx)' };
+  selectCS('csSkinTier', 'skinTier', s.tier || 'standard', tierLabels[s.tier || 'standard']);
+
+  updatePreview();
+  showToast(`Editing "${s.name}"`, 'info');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+let pendingDeleteSkinId = null;
+function confirmDeleteSkin(skinId, name) {
+  if (!confirm(`Delete the "${name}" skin? Items using it will fall back to the default frame.`)) return;
+  deleteSkin(skinId)
+    .then(() => { showToast('Skin deleted', 'info'); renderAdminSkinsList(); })
+    .catch(err => showToast('Error: ' + err.message, 'error'));
+}
+
+
 // COUNTDOWN TIMER (Exotic Shop)
 // ═══════════════════════════════════════════
 function startCountdown() {
@@ -1907,6 +2142,12 @@ window.openSlideModal = openSlideModal;
 window.closeSlideModal = closeSlideModal;
 window.adminCreditGB = adminCreditGB;
 window.adminSettleDebt = adminSettleDebt;
+window.setAdminTab = setAdminTab;
+window.updatePreview = updatePreview;
+window.setPreviewBg = setPreviewBg;
+window.saveCurrentSkin = saveCurrentSkin;
+window.loadSkinIntoStudio = loadSkinIntoStudio;
+window.confirmDeleteSkin = confirmDeleteSkin;
 window.copyProfileLink = copyProfileLink;
 window.showToast = showToast;
 window.openEditProfile = openEditProfile;
