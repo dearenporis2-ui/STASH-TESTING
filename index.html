@@ -8,6 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stash</title>
   <link rel="stylesheet" href="styles.v2.css" />
+  <link rel="stylesheet" href="cardEngine.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
   <!-- Cloudinary Upload Widget -->
   <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
@@ -572,31 +573,131 @@
 
         <!-- ═══════════ ADMIN PANEL ═══════════ -->
         <div class="screen" id="screen-admin">
-          <div class="admin-grid">
-            <div class="admin-card">
-              <div class="admin-card-title">🟨 Credit Gold Blocks</div>
-              <div class="modal-group"><div class="modal-label">Username</div><input class="modal-input" id="adminUsername" type="text" placeholder="@username" /></div>
-              <div class="modal-group"><div class="modal-label">Amount (GB)</div><input class="modal-input" id="adminGBAmount" type="number" placeholder="e.g. 500" /></div>
-              <div class="modal-group"><div class="modal-label">Note</div><input class="modal-input" id="adminNote" type="text" placeholder="e.g. Cash received SCR 250" /></div>
-              <button class="modal-btn" onclick="adminCreditGB()">Credit Gold Blocks</button>
+
+          <!-- ADMIN SUB-TABS -->
+          <div class="filter-row" style="margin-bottom:24px">
+            <div class="filter-chip active" onclick="setAdminTab(this,'overview')">Overview</div>
+            <div class="filter-chip" onclick="setAdminTab(this,'skinStudio')">🎨 Skin Studio</div>
+          </div>
+
+          <!-- ═══ OVERVIEW TAB ═══ -->
+          <div id="adminTab-overview">
+            <div class="admin-grid">
+              <div class="admin-card">
+                <div class="admin-card-title">🟨 Credit Gold Blocks</div>
+                <div class="modal-group"><div class="modal-label">Username</div><input class="modal-input" id="adminUsername" type="text" placeholder="@username" /></div>
+                <div class="modal-group"><div class="modal-label">Amount (GB)</div><input class="modal-input" id="adminGBAmount" type="number" placeholder="e.g. 500" /></div>
+                <div class="modal-group"><div class="modal-label">Note</div><input class="modal-input" id="adminNote" type="text" placeholder="e.g. Cash received SCR 250" /></div>
+                <button class="modal-btn" onclick="adminCreditGB()">Credit Gold Blocks</button>
+              </div>
+              <div class="admin-card">
+                <div class="admin-card-title">&#128203; Settle Seller Debt</div>
+                <div class="modal-group"><div class="modal-label">Username</div><input class="modal-input" id="adminDebtUsername" type="text" placeholder="@username" /></div>
+                <div class="modal-group"><div class="modal-label">Debt ID</div><input class="modal-input" id="adminDebtId" type="text" placeholder="Debt document ID" /></div>
+                <button class="modal-btn" onclick="adminSettleDebt()">Settle Debt & Unlock Account</button>
+              </div>
             </div>
-            <div class="admin-card">
-              <div class="admin-card-title">&#128203; Settle Seller Debt</div>
-              <div class="modal-group"><div class="modal-label">Username</div><input class="modal-input" id="adminDebtUsername" type="text" placeholder="@username" /></div>
-              <div class="modal-group"><div class="modal-label">Debt ID</div><input class="modal-input" id="adminDebtId" type="text" placeholder="Debt document ID" /></div>
-              <button class="modal-btn" onclick="adminSettleDebt()">Settle Debt & Unlock Account</button>
+            <div class="section-header"><div class="section-title">&#128203; All Pending Debts</div><div class="section-line"></div></div>
+            <div id="adminDebtList">
+              <div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>
+            </div>
+            <div class="section-header" style="margin-top:28px"><div class="section-title">&#128202; Platform Stats</div><div class="section-line"></div></div>
+            <div class="stats-row">
+              <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="adminTotalUsers">-</div></div>
+              <div class="stat-card"><div class="stat-label">Active Listings</div><div class="stat-value" id="adminTotalListings">-</div></div>
+              <div class="stat-card"><div class="stat-label">Completed Trades</div><div class="stat-value" id="adminTotalTrades">-</div></div>
             </div>
           </div>
-          <div class="section-header"><div class="section-title">&#128203; All Pending Debts</div><div class="section-line"></div></div>
-          <div id="adminDebtList">
-            <div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>
+
+          <!-- ═══ SKIN STUDIO TAB ═══ -->
+          <div id="adminTab-skinStudio" style="display:none">
+            <div style="display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start">
+
+              <!-- LIVE PREVIEW -->
+              <div style="position:sticky;top:20px">
+                <div class="section-header"><div class="section-title">👁 Live Preview</div></div>
+                <div style="max-width:240px;margin:0 auto 16px">
+                  <div id="skinPreviewMount"></div>
+                </div>
+                <div class="filter-row" style="justify-content:center">
+                  <div class="filter-chip active" onclick="setPreviewBg(this,'dark')">Dark BG</div>
+                  <div class="filter-chip" onclick="setPreviewBg(this,'grid')">Grid BG</div>
+                </div>
+              </div>
+
+              <!-- EDITOR CONTROLS -->
+              <div>
+                <div class="admin-card" style="margin-bottom:16px">
+                  <div class="admin-card-title">Skin Identity</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="modal-group"><div class="modal-label">Skin Name</div><input class="modal-input" id="skinName" type="text" placeholder="e.g. Dragon Fire" oninput="updatePreview()" /></div>
+                    <div class="modal-group">
+                      <div class="modal-label">Tier</div>
+                      <div class="custom-select-wrap" id="csSkinTier">
+                        <input type="hidden" id="skinTier" value="standard" />
+                        <div class="cs-selected" onclick="toggleCS('csSkinTier')">
+                          <span id="csSkinTierLabel">⬜ Standard</span>
+                          <i class="ti ti-chevron-down cs-arrow"></i>
+                        </div>
+                        <div class="cs-dropdown">
+                          <div class="cs-option selected" onclick="selectCS('csSkinTier','skinTier','standard','⬜ Standard'); updatePreview()"><span class="cs-opt-icon">⬜</span>Standard</div>
+                          <div class="cs-option" onclick="selectCS('csSkinTier','skinTier','rare','🔷 Rare'); updatePreview()"><span class="cs-opt-icon">🔷</span>Rare</div>
+                          <div class="cs-option" onclick="selectCS('csSkinTier','skinTier','epic','🟣 Epic'); updatePreview()"><span class="cs-opt-icon">🟣</span>Epic</div>
+                          <div class="cs-option" onclick="selectCS('csSkinTier','skinTier','mythic','🔥 Mythic (breakout fx)'); updatePreview()"><span class="cs-opt-icon">🔥</span>Mythic (breakout fx)</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="modal-group" style="grid-column:span 2"><div class="modal-label">Badge Label (shown on card corner)</div><input class="modal-input" id="skinBadgeLabel" type="text" placeholder="e.g. MYTHIC" oninput="updatePreview()" /></div>
+                  </div>
+                </div>
+
+                <div class="admin-card" style="margin-bottom:16px">
+                  <div class="admin-card-title">Glow Layer</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="modal-group"><div class="modal-label">Glow Color</div><input class="modal-input" id="skinGlowColor" type="color" value="#D4A017" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
+                    <div class="modal-group"><div class="modal-label">Intensity: <span id="valGlowIntensity">0.3</span></div><input type="range" id="skinGlowIntensity" min="0" max="1" step="0.05" value="0.3" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                    <div class="modal-group" style="grid-column:span 2"><div class="modal-label">Pulse Speed: <span id="valGlowSpeed">3.5</span>s</div><input type="range" id="skinGlowSpeed" min="1" max="10" step="0.5" value="3.5" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                  </div>
+                </div>
+
+                <div class="admin-card" style="margin-bottom:16px">
+                  <div class="admin-card-title">Frame Layer</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="modal-group"><div class="modal-label">Frame Width: <span id="valFrameWidth">2</span>px</div><input type="range" id="skinFrameWidth" min="0" max="8" step="1" value="2" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                    <div class="modal-group"><div class="modal-label">Frame Color</div><input class="modal-input" id="skinFrameColor" type="color" value="#D4A017" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
+                    <div class="modal-group" style="grid-column:span 2;display:flex;align-items:center;gap:10px">
+                      <input type="checkbox" id="skinFrameAnimated" style="width:18px;height:18px;accent-color:var(--gold)" onchange="updatePreview()" />
+                      <label for="skinFrameAnimated" style="font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer">Animated gradient border (holo/iridescent)</label>
+                    </div>
+                    <div class="modal-group"><div class="modal-label">Gradient Color 2</div><input class="modal-input" id="skinFrameColor2" type="color" value="#6ee7f7" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
+                    <div class="modal-group"><div class="modal-label">Gradient Color 3</div><input class="modal-input" id="skinFrameColor3" type="color" value="#a855f7" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
+                  </div>
+                </div>
+
+                <div class="admin-card" style="margin-bottom:16px" id="breakoutPanel">
+                  <div class="admin-card-title">Breakout / Bleed FX <span style="font-size:11px;color:var(--text-muted);font-weight:600">— Mythic tier only</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="modal-group"><div class="modal-label">Bleed Offset: <span id="valBreakoutOffset">20</span>px</div><input type="range" id="skinBreakoutOffset" min="0" max="60" step="2" value="20" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                    <div class="modal-group"><div class="modal-label">Bleed Scale: <span id="valBreakoutScale">1</span>x</div><input type="range" id="skinBreakoutScale" min="0.5" max="2" step="0.05" value="1" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                    <div class="modal-group"><div class="modal-label">Rotation: <span id="valBleedRotation">0</span>&deg;</div><input type="range" id="skinBleedRotation" min="0" max="360" step="5" value="0" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                    <div class="modal-group"><div class="modal-label">Pulse Speed: <span id="valBreakoutSpeed">4</span>s</div><input type="range" id="skinBreakoutSpeed" min="1" max="10" step="0.5" value="4" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
+                  </div>
+                </div>
+
+                <div class="admin-card">
+                  <div class="admin-card-title">Save Skin</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">This skin becomes instantly available to every user in their listing Card Frame dropdown once saved.</div>
+                  <button class="modal-btn" onclick="saveCurrentSkin()">Save & Publish Skin ✦</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-header" style="margin-top:32px"><div class="section-title">🗂 All Saved Skins</div><div class="section-line"></div></div>
+            <div class="shop-grid" id="adminSkinsList" style="grid-template-columns:repeat(4,1fr)">
+              <div style="grid-column:span 4;text-align:center;padding:40px;color:var(--text-muted)">Loading skins...</div>
+            </div>
           </div>
-          <div class="section-header" style="margin-top:28px"><div class="section-title">&#128202; Platform Stats</div><div class="section-line"></div></div>
-          <div class="stats-row">
-            <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="adminTotalUsers">-</div></div>
-            <div class="stat-card"><div class="stat-label">Active Listings</div><div class="stat-value" id="adminTotalListings">-</div></div>
-            <div class="stat-card"><div class="stat-label">Completed Trades</div><div class="stat-value" id="adminTotalTrades">-</div></div>
-          </div>
+
         </div>
 
       </div><!-- screen-wrap -->
@@ -696,13 +797,14 @@
             <span id="csFrameLabel">⬜ Default (Free)</span>
             <i class="ti ti-chevron-down cs-arrow"></i>
           </div>
-          <div class="cs-dropdown">
+          <div class="cs-dropdown" id="csFrameDropdown">
             <div class="cs-option selected" onclick="selectCS('csFrame','listingFrame','default','⬜ Default (Free)')"><span class="cs-opt-icon">⬜</span>Default (Free)</div>
             <div class="cs-option" onclick="selectCS('csFrame','listingFrame','gold','🟨 Liquid Gold Frame')"><span class="cs-opt-icon">🟨</span>Liquid Gold Frame</div>
             <div class="cs-option" onclick="selectCS('csFrame','listingFrame','holo','🌈 Holographic Foil')"><span class="cs-opt-icon">🌈</span>Holographic Foil</div>
             <div class="cs-option" onclick="selectCS('csFrame','listingFrame','purple','💜 Royal Purple')"><span class="cs-opt-icon">💜</span>Royal Purple</div>
             <div class="cs-option" onclick="selectCS('csFrame','listingFrame','carbon','🖤 Carbon Fiber')"><span class="cs-opt-icon">🖤</span>Carbon Fiber</div>
             <div class="cs-option" onclick="selectCS('csFrame','listingFrame','neon','💚 Neon Grid')"><span class="cs-opt-icon">💚</span>Neon Grid</div>
+            <!-- Custom admin-created skins are injected here dynamically -->
           </div>
         </div>
       </div>
