@@ -1653,10 +1653,16 @@ async function loadAdminData() {
 // ADMIN SUB-TABS
 // ═══════════════════════════════════════════
 function setAdminTab(el, tab) {
-  document.querySelectorAll('#screen-admin .filter-row .filter-chip').forEach(c => c.classList.remove('active'));
+  // Update chip state
+  document.querySelectorAll('#screen-admin .filter-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('adminTab-overview').style.display = tab === 'overview' ? 'block' : 'none';
-  document.getElementById('adminTab-skinStudio').style.display = tab === 'skinStudio' ? 'block' : 'none';
+
+  // Show/hide panels
+  const overview = document.getElementById('adminTab-overview');
+  const studio = document.getElementById('adminTab-skinStudio');
+  if (overview) overview.style.display = tab === 'overview' ? 'block' : 'none';
+  if (studio) studio.style.display = tab === 'skinStudio' ? 'block' : 'none';
+
   if (tab === 'skinStudio') {
     initSkinStudioPreview();
     renderAdminSkinsList();
@@ -1672,14 +1678,28 @@ let previewBgMode = 'dark';
 function initSkinStudioPreview() {
   const mount = document.getElementById('skinPreviewMount');
   if (!mount) return;
-  mount.innerHTML = renderCardHTML({
-    id: 'preview',
-    name: 'Rolex Daytona',
-    priceLabel: 'SCR 38,500',
-    emoji: '⌚',
-    skinId: 'previewLive'
-  });
-  applyPreviewBgStyle();
+
+  // Build the preview card inline — no engine dependency so it always works
+  mount.innerHTML = `
+    <div id="sce-preview" class="stash-card-engine" data-tier="standard" style="
+      position:relative; width:100%; aspect-ratio:1;
+      border-radius:16px; overflow:visible; isolation:isolate;
+    ">
+      <div class="sce-layer-bg"></div>
+      <div class="sce-layer-asset" style="position:absolute;inset:8%;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);font-size:48px;z-index:2">⌚</div>
+      <div class="sce-layer-frame" style="position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:3"></div>
+      <div class="sce-layer-breakout" style="position:absolute;inset:0;overflow:visible;pointer-events:none;z-index:4;display:none">
+        <div class="sce-breakout-spikes"></div>
+      </div>
+      <div class="sce-tier-badge" id="previewBadge" style="display:none"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:5;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,0.75),transparent);border-radius:0 0 16px 16px">
+        <div style="font-size:12px;font-weight:700;color:#fff">Rolex Daytona</div>
+        <div id="previewPrice" style="font-size:13px;font-weight:800;color:#D4A017">SCR 38,500</div>
+      </div>
+    </div>`;
+
+  mount.style.padding = '24px';
+  mount.style.borderRadius = '16px';
   updatePreview();
 }
 
@@ -1744,20 +1764,85 @@ function hexToRgba(hex, alpha) {
 // this is the "instant repaint" requirement, driven entirely by reading
 // the form and writing CSS custom properties, no rebuild of the DOM.
 function updatePreview() {
-  setText('valGlowIntensity', document.getElementById('skinGlowIntensity').value);
-  setText('valGlowSpeed', document.getElementById('skinGlowSpeed').value);
-  setText('valFrameWidth', document.getElementById('skinFrameWidth').value);
-  setText('valBreakoutOffset', document.getElementById('skinBreakoutOffset').value);
-  setText('valBreakoutScale', document.getElementById('skinBreakoutScale').value);
-  setText('valBleedRotation', document.getElementById('skinBleedRotation').value);
-  setText('valBreakoutSpeed', document.getElementById('skinBreakoutSpeed').value);
+  // Update readout labels
+  const vals = {
+    valGlowIntensity: 'skinGlowIntensity',
+    valGlowSpeed: 'skinGlowSpeed',
+    valFrameWidth: 'skinFrameWidth',
+    valBreakoutOffset: 'skinBreakoutOffset',
+    valBreakoutScale: 'skinBreakoutScale',
+    valBleedRotation: 'skinBleedRotation',
+    valBreakoutSpeed: 'skinBreakoutSpeed'
+  };
+  Object.entries(vals).forEach(([labelId, inputId]) => {
+    const el = document.getElementById(inputId);
+    const label = document.getElementById(labelId);
+    if (el && label) label.textContent = el.value;
+  });
 
   const config = readSkinFormConfig();
+
+  // Show/dim breakout panel based on tier
   const breakoutPanel = document.getElementById('breakoutPanel');
   if (breakoutPanel) breakoutPanel.style.opacity = config.tier === 'mythic' ? '1' : '0.4';
 
   const previewEl = document.getElementById('sce-preview');
-  if (previewEl) applySkinToElement(previewEl, config);
+  if (!previewEl) return;
+
+  // Write every config value as a CSS custom property directly on the element
+  previewEl.dataset.tier = config.tier;
+
+  const cssMap = {
+    '--glow-color': config.glowColor,
+    '--glow-intensity': config.glowIntensity,
+    '--glow-speed': config.glowSpeed + 's',
+    '--frame-color': config.frameColor,
+    '--frame-width': config.frameWidth + 'px',
+    '--frame-color-1': config.frameColor1,
+    '--frame-color-2': config.frameColor2,
+    '--frame-color-3': config.frameColor3,
+    '--gradient-speed': (config.gradientSpeed || 6) + 's',
+    '--frame-shadow-blur': '20px',
+    '--frame-shadow-spread': '0px',
+    '--breakout-offset': config.breakoutOffset + 'px',
+    '--breakout-scale': config.breakoutScale,
+    '--breakout-opacity': config.breakoutOpacity || 0.85,
+    '--breakout-speed': config.breakoutSpeed + 's',
+    '--bleed-rotation': config.bleedRotation + 'deg',
+    '--badge-bg': config.badgeBg,
+    '--badge-border': config.badgeBorder,
+    '--badge-color': config.badgeColor
+  };
+
+  // Single batched write — no layout reads interleaved
+  Object.entries(cssMap).forEach(([prop, val]) => {
+    previewEl.style.setProperty(prop, val);
+  });
+
+  // Update frame layer classes
+  const frameLayer = previewEl.querySelector('.sce-layer-frame');
+  if (frameLayer) {
+    frameLayer.classList.toggle('sce-frame-animated', !!config.frameAnimated);
+  }
+
+  // Show/hide breakout layer for mythic
+  const breakoutLayer = previewEl.querySelector('.sce-layer-breakout');
+  if (breakoutLayer) breakoutLayer.style.display = config.tier === 'mythic' ? 'block' : 'none';
+
+  // Badge
+  const badge = document.getElementById('previewBadge');
+  if (badge) {
+    if (config.badgeLabel && config.tier !== 'standard') {
+      badge.style.display = 'block';
+      badge.textContent = config.badgeLabel;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  // Update price color to match glow
+  const price = document.getElementById('previewPrice');
+  if (price) price.style.color = config.glowColor;
 }
 
 async function saveCurrentSkin() {
