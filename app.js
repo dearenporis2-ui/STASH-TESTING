@@ -5,10 +5,74 @@
 
 import { auth, db } from './firebase.js';
 import { openUploadWidget } from './cloudinary.js';
-import {
-  startSkinSync, getSkin, getAllSkins, saveSkin, deleteSkin,
-  applySkinToElement, renderCardHTML, mountCard, DEFAULT_SKIN
-} from './cardEngine.js';
+// ── Card Engine (inlined — avoids module path issues on GitHub Pages) ──
+const DEFAULT_SKIN = {
+  id: 'default', name: 'Default', tier: 'standard',
+  glowColor: '#D4A017', glowIntensity: 0.12, glowSpeed: 4,
+  frameColor: 'rgba(255,255,255,0.1)', frameWidth: 1, frameAnimated: false,
+  breakoutEnabled: false, badgeBg: 'rgba(212,160,23,0.1)',
+  badgeBorder: 'rgba(212,160,23,0.3)', badgeColor: '#D4A017', badgeLabel: ''
+};
+let _skinCache = { default: DEFAULT_SKIN };
+let _skinsUnsub = null;
+
+function startSkinSync(onUpdate) {
+  if (_skinsUnsub) return;
+  _skinsUnsub = onSnapshot(collection(db, 'cardSkins'), (snap) => {
+    snap.docs.forEach(d => { _skinCache[d.id] = { id: d.id, ...d.data() }; });
+    if (onUpdate) onUpdate(_skinCache);
+  });
+}
+function getSkin(id) { return _skinCache[id] || DEFAULT_SKIN; }
+function getAllSkins() { return Object.values(_skinCache); }
+async function saveSkin(skinId, config) {
+  const id = skinId || ('skin_' + Date.now());
+  await setDoc(doc(db, 'cardSkins', id), config, { merge: false });
+  _skinCache[id] = { id, ...config };
+  return id;
+}
+async function deleteSkin(skinId) {
+  if (skinId === 'default') throw new Error('Cannot delete default skin');
+  await deleteDoc(doc(db, 'cardSkins', skinId));
+  delete _skinCache[skinId];
+}
+function applySkinToElement(el, skin) {
+  if (!el || !skin) return;
+  const px = new Set(['frameWidth','frameShadowBlur','breakoutOffset','cardRadius','assetRadius']);
+  const s = new Set(['glowSpeed','gradientSpeed','breakoutSpeed']);
+  const deg = new Set(['bleedRotation']);
+  const skip = new Set(['id','name','tier','frameAnimated','breakoutEnabled','badgeLabel']);
+  Object.entries(skin).forEach(([k, v]) => {
+    if (skip.has(k) || v === undefined || v === null) return;
+    let val = v;
+    const key = k.replace(/([a-z0-9])([A-Z])/g,'$1-$2').toLowerCase();
+    if (px.has(k) && typeof v === 'number') val = v + 'px';
+    else if (s.has(k) && typeof v === 'number') val = v + 's';
+    else if (deg.has(k) && typeof v === 'number') val = v + 'deg';
+    el.style.setProperty('--' + key, val);
+  });
+  el.dataset.tier = skin.tier || 'standard';
+  const frame = el.querySelector('.sce-layer-frame');
+  if (frame) frame.classList.toggle('sce-frame-animated', !!skin.frameAnimated);
+}
+function renderCardHTML({ id, name, imageUrl, priceLabel, emoji, skinId }) {
+  return \`<div class="stash-card-engine" id="sce-\${id}" data-skin="\${skinId||'default'}">
+    <div class="sce-layer-bg"></div>
+    <div class="sce-layer-asset" style="position:absolute;inset:8%;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);font-size:38px;z-index:2">
+      \${imageUrl ? \`<img src="\${imageUrl}" style="width:100%;height:100%;object-fit:cover">\` : (emoji||'📦')}
+    </div>
+    <div class="sce-layer-frame"></div>
+    <div class="sce-layer-breakout"><div class="sce-breakout-spikes"></div></div>
+    <div class="sce-layer-footer">
+      <div class="sce-footer-name">\${name||''}</div>
+      <div class="sce-footer-value">\${priceLabel||''}</div>
+    </div>
+  </div>\`;
+}
+function mountCard(id, skinId) {
+  const el = document.getElementById('sce-' + id);
+  if (el) applySkinToElement(el, getSkin(skinId||'default'));
+}
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
