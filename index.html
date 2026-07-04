@@ -610,107 +610,364 @@
           </div>
 
           <!-- ═══ SKIN STUDIO TAB ═══ -->
-          <div id="adminTab-skinStudio" style="display:none">
-            <div style="display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start">
+          <div id="adminTab-skinStudio" style="display:none;margin:-36px -40px 0;height:calc(100vh - 180px);overflow:hidden">
 
-              <!-- LIVE PREVIEW -->
-              <div style="position:sticky;top:20px">
-                <div class="section-header"><div class="section-title">👁 Live Preview</div></div>
-                <div style="max-width:240px;margin:0 auto 16px">
-                  <div id="skinPreviewMount"></div>
-                </div>
-                <div class="filter-row" style="justify-content:center">
-                  <div class="filter-chip active" onclick="setPreviewBg(this,'dark')">Dark BG</div>
-                  <div class="filter-chip" onclick="setPreviewBg(this,'grid')">Grid BG</div>
-                </div>
-              </div>
+  <!-- ══════════════════════════════════════
+       GAME ENGINE SANDBOX — 3 COLUMN LAYOUT
+  ══════════════════════════════════════ -->
+  <div id="skinStudioLayout" style="
+    display:grid;
+    grid-template-columns:200px 1fr 280px;
+    grid-template-rows:1fr 0px;
+    height:100%;
+    transition:grid-template-rows 0.3s ease;
+  ">
 
-              <!-- EDITOR CONTROLS -->
-              <div>
-                <div class="admin-card" style="margin-bottom:16px">
-                  <div class="admin-card-title">Skin Identity</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <div class="modal-group"><div class="modal-label">Skin Name</div><input class="modal-input" id="skinName" type="text" placeholder="e.g. Dragon Fire" oninput="updatePreview()" /></div>
-                    <div class="modal-group">
-                      <div class="modal-label">Tier</div>
-                      <div class="custom-select-wrap" id="csSkinTier">
-                        <input type="hidden" id="skinTier" value="standard" />
-                        <div class="cs-selected" onclick="toggleCS('csSkinTier')">
-                          <span id="csSkinTierLabel">⬜ Standard</span>
-                          <i class="ti ti-chevron-down cs-arrow"></i>
-                        </div>
-                        <div class="cs-dropdown">
-                          <div class="cs-option selected" onclick="selectCS('csSkinTier','skinTier','standard','⬜ Standard'); updatePreview()"><span class="cs-opt-icon">⬜</span>Standard</div>
-                          <div class="cs-option" onclick="selectCS('csSkinTier','skinTier','rare','🔷 Rare'); updatePreview()"><span class="cs-opt-icon">🔷</span>Rare</div>
-                          <div class="cs-option" onclick="selectCS('csSkinTier','skinTier','epic','🟣 Epic'); updatePreview()"><span class="cs-opt-icon">🟣</span>Epic</div>
-                          <div class="cs-option" onclick="selectCS('csSkinTier','skinTier','mythic','🔥 Mythic (breakout fx)'); updatePreview()"><span class="cs-opt-icon">🔥</span>Mythic (breakout fx)</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="modal-group" style="grid-column:span 2"><div class="modal-label">Badge Label (shown on card corner)</div><input class="modal-input" id="skinBadgeLabel" type="text" placeholder="e.g. MYTHIC" oninput="updatePreview()" /></div>
-                  </div>
-                </div>
+    <!-- ═══ COLUMN 1: LAYER TREE ═══ -->
+    <div style="
+      background:rgba(6,6,8,0.95);
+      border-right:1px solid rgba(255,255,255,0.06);
+      padding:20px 0;
+      overflow-y:auto;
+      display:flex;flex-direction:column;gap:2px;
+    ">
+      <div style="padding:0 16px 14px;font-size:10px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,0.25);text-transform:uppercase">Layer Stack</div>
 
-                <div class="admin-card" style="margin-bottom:16px">
-                  <div class="admin-card-title">Glow Layer</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <div class="modal-group"><div class="modal-label">Glow Color</div><input class="modal-input" id="skinGlowColor" type="color" value="#D4A017" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
-                    <div class="modal-group"><div class="modal-label">Intensity: <span id="valGlowIntensity">0.3</span></div><input type="range" id="skinGlowIntensity" min="0" max="1" step="0.05" value="0.3" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                    <div class="modal-group" style="grid-column:span 2"><div class="modal-label">Pulse Speed: <span id="valGlowSpeed">3.5</span>s</div><input type="range" id="skinGlowSpeed" min="1" max="10" step="0.5" value="3.5" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                  </div>
-                </div>
+      <!-- Layer rows -->
+      <div class="layer-row" id="layer-breakout" data-layer="breakout" onclick="selectLayer(this)">
+        <span class="layer-eye" onclick="toggleLayer(event,'breakout')" title="Toggle visibility"><i class="ti ti-eye"></i></span>
+        <span class="layer-icon" style="color:#ff6b6b">⬡</span>
+        <div class="layer-info">
+          <div class="layer-name">Bleed &amp; Breakout</div>
+          <div class="layer-sub">Top Layer · FX</div>
+        </div>
+      </div>
 
-                <div class="admin-card" style="margin-bottom:16px">
-                  <div class="admin-card-title">Frame Layer</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <div class="modal-group"><div class="modal-label">Frame Width: <span id="valFrameWidth">2</span>px</div><input type="range" id="skinFrameWidth" min="0" max="8" step="1" value="2" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                    <div class="modal-group"><div class="modal-label">Frame Color</div><input class="modal-input" id="skinFrameColor" type="color" value="#D4A017" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
-                    <div class="modal-group" style="grid-column:span 2;display:flex;align-items:center;gap:10px">
-                      <input type="checkbox" id="skinFrameAnimated" style="width:18px;height:18px;accent-color:var(--gold)" onchange="updatePreview()" />
-                      <label for="skinFrameAnimated" style="font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer">Animated gradient border (holo/iridescent)</label>
-                    </div>
-                    <div class="modal-group"><div class="modal-label">Gradient Color 2</div><input class="modal-input" id="skinFrameColor2" type="color" value="#6ee7f7" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
-                    <div class="modal-group"><div class="modal-label">Gradient Color 3</div><input class="modal-input" id="skinFrameColor3" type="color" value="#a855f7" oninput="updatePreview()" style="height:44px;padding:6px;cursor:pointer" /></div>
-                  </div>
-                </div>
+      <div class="layer-row" id="layer-badge" data-layer="badge" onclick="selectLayer(this)">
+        <span class="layer-eye" onclick="toggleLayer(event,'badge')" title="Toggle visibility"><i class="ti ti-eye"></i></span>
+        <span class="layer-icon" style="color:#D4A017">◈</span>
+        <div class="layer-info">
+          <div class="layer-name">Badge &amp; Metadata</div>
+          <div class="layer-sub">Middle · Label</div>
+        </div>
+      </div>
 
-                <div class="admin-card" style="margin-bottom:16px" id="breakoutPanel">
-                  <div class="admin-card-title">Breakout / Bleed FX <span style="font-size:11px;color:var(--text-muted);font-weight:600">— Mythic tier only</span></div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <div class="modal-group"><div class="modal-label">Bleed Offset: <span id="valBreakoutOffset">20</span>px</div><input type="range" id="skinBreakoutOffset" min="0" max="60" step="2" value="20" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                    <div class="modal-group"><div class="modal-label">Bleed Scale: <span id="valBreakoutScale">1</span>x</div><input type="range" id="skinBreakoutScale" min="0.5" max="2" step="0.05" value="1" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                    <div class="modal-group"><div class="modal-label">Rotation: <span id="valBleedRotation">0</span>&deg;</div><input type="range" id="skinBleedRotation" min="0" max="360" step="5" value="0" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                    <div class="modal-group"><div class="modal-label">Pulse Speed: <span id="valBreakoutSpeed">4</span>s</div><input type="range" id="skinBreakoutSpeed" min="1" max="10" step="0.5" value="4" class="modal-input" style="padding:0;height:8px" oninput="updatePreview()" /></div>
-                  </div>
-                </div>
+      <div class="layer-row" id="layer-frame" data-layer="frame" onclick="selectLayer(this)" style="background:rgba(212,160,23,0.06);border-left:2px solid #D4A017">
+        <span class="layer-eye" onclick="toggleLayer(event,'frame')" title="Toggle visibility"><i class="ti ti-eye"></i></span>
+        <span class="layer-icon" style="color:#6ee7f7">▣</span>
+        <div class="layer-info">
+          <div class="layer-name">Frame Skin</div>
+          <div class="layer-sub">Middle · Border</div>
+        </div>
+      </div>
 
-                <div class="admin-card">
-                  <div class="admin-card-title">Save Skin</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">This skin becomes instantly available to every user in their listing Card Frame dropdown once saved.</div>
-                  <button class="modal-btn" onclick="saveCurrentSkin()">Save & Publish Skin ✦</button>
-                </div>
-              </div>
-            </div>
+      <div class="layer-row" id="layer-asset" data-layer="asset" onclick="selectLayer(this)">
+        <span class="layer-eye" onclick="toggleLayer(event,'asset')" title="Toggle visibility"><i class="ti ti-eye"></i></span>
+        <span class="layer-icon" style="color:#a855f7">◼</span>
+        <div class="layer-info">
+          <div class="layer-name">Core Asset</div>
+          <div class="layer-sub">Base · Image</div>
+        </div>
+      </div>
 
-            <div class="section-header" style="margin-top:32px"><div class="section-title">🗂 All Saved Skins</div><div class="section-line"></div></div>
-            <div class="shop-grid" id="adminSkinsList" style="grid-template-columns:repeat(4,1fr)">
-              <div style="grid-column:span 4;text-align:center;padding:40px;color:var(--text-muted)">Loading skins...</div>
+      <div class="layer-row" id="layer-bg" data-layer="bg" onclick="selectLayer(this)">
+        <span class="layer-eye" onclick="toggleLayer(event,'bg')" title="Toggle visibility"><i class="ti ti-eye"></i></span>
+        <span class="layer-icon" style="color:#2ecc71">◎</span>
+        <div class="layer-info">
+          <div class="layer-name">Glow &amp; Shader</div>
+          <div class="layer-sub">Background · FX</div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="height:1px;background:rgba(255,255,255,0.05);margin:12px 0"></div>
+
+      <!-- Skin selector -->
+      <div style="padding:0 16px 10px;font-size:10px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,0.25);text-transform:uppercase">Saved Skins</div>
+      <div id="studioSkinList" style="padding:0 8px;display:flex;flex-direction:column;gap:2px">
+        <div style="font-size:11px;color:rgba(255,255,255,0.25);padding:8px 10px">No skins yet</div>
+      </div>
+
+      <!-- Save button at bottom -->
+      <div style="margin-top:auto;padding:12px">
+        <button onclick="saveCurrentSkin()" style="
+          width:100%;background:#D4A017;border:none;border-radius:10px;
+          padding:11px;font-size:12px;font-weight:800;color:#080809;
+          font-family:Inter,sans-serif;cursor:pointer;
+          box-shadow:0 0 16px rgba(212,160,23,0.3);
+          transition:all 0.2s;
+        " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          ✦ Publish Skin
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ COLUMN 2: HERO CANVAS ═══ -->
+    <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden">
+
+      <!-- Blueprint grid background -->
+      <div id="studioCanvasBg" style="
+        position:absolute;inset:0;
+        background:
+          radial-gradient(ellipse 60% 50% at 50% 50%, rgba(212,160,23,0.04) 0%, transparent 70%),
+          repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 40px),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 40px),
+          #080809;
+        pointer-events:none;
+      "></div>
+
+      <!-- Radar reticle rings -->
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.06">
+        <div style="position:absolute;width:500px;height:500px;border-radius:50%;border:1px solid #D4A017"></div>
+        <div style="position:absolute;width:360px;height:360px;border-radius:50%;border:1px solid #D4A017"></div>
+        <div style="position:absolute;width:220px;height:220px;border-radius:50%;border:1px solid #D4A017"></div>
+        <div style="position:absolute;width:1px;height:80%;background:#D4A017"></div>
+        <div style="position:absolute;width:80%;height:1px;background:#D4A017"></div>
+      </div>
+
+      <!-- Coordinate readout -->
+      <div id="studioCoords" style="
+        position:absolute;top:16px;left:16px;
+        font-size:10px;font-weight:700;color:rgba(212,160,23,0.4);
+        font-family:monospace;letter-spacing:1px;pointer-events:none;
+      ">X: 0.00 · Y: 0.00 · ROT: 0°</div>
+
+      <!-- Canvas status -->
+      <div style="position:absolute;top:16px;right:16px;display:flex;align-items:center;gap:6px">
+        <div style="width:6px;height:6px;border-radius:50%;background:#2ecc71;box-shadow:0 0 8px #2ecc71"></div>
+        <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:1px">LIVE</span>
+      </div>
+
+      <!-- THE PARALLAX CARD STAGE -->
+      <div id="studioCardStage" style="
+        position:relative;width:220px;
+        transform-style:preserve-3d;
+        perspective:800px;
+        cursor:crosshair;
+        z-index:10;
+      " onmousemove="handleParallax(event)" onmouseleave="resetParallax()">
+        <div id="studioCardInner" style="
+          width:100%;
+          transform-style:preserve-3d;
+          transition:transform 0.1s ease;
+          will-change:transform;
+        ">
+          <!-- The 5-layer preview card -->
+          <div id="sce-preview" class="stash-card-engine" data-tier="standard" style="width:100%;aspect-ratio:1;border-radius:16px;overflow:visible;isolation:isolate;position:relative">
+            <div class="sce-layer-bg"></div>
+            <div class="sce-layer-asset" style="position:absolute;inset:8%;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);font-size:48px;z-index:2">⌚</div>
+            <div class="sce-layer-frame" style="position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:3;border:2px solid rgba(255,255,255,0.1)"></div>
+            <div class="sce-layer-breakout" style="position:absolute;inset:0;overflow:visible;pointer-events:none;z-index:4;display:none"><div class="sce-breakout-spikes"></div></div>
+            <div class="sce-tier-badge" id="previewBadge" style="display:none;position:absolute;top:8px;right:8px;z-index:6;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:6px"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;z-index:5;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,0.8),transparent);border-radius:0 0 16px 16px">
+              <div style="font-size:12px;font-weight:700;color:#fff">Rolex Daytona</div>
+              <div id="previewPrice" style="font-size:13px;font-weight:800;color:#D4A017">SCR 38,500</div>
             </div>
           </div>
-
         </div>
+      </div>
 
+      <!-- Canvas BG toggle pills -->
+      <div style="position:absolute;bottom:20px;display:flex;gap:8px">
+        <div class="filter-chip active" onclick="setPreviewBg(this,'dark')" style="font-size:11px;padding:6px 14px">Dark BG</div>
+        <div class="filter-chip" onclick="setPreviewBg(this,'grid')" style="font-size:11px;padding:6px 14px">Grid BG</div>
+        <div class="filter-chip" onclick="setPreviewBg(this,'blur')" style="font-size:11px;padding:6px 14px">Blur BG</div>
+      </div>
+    </div>
+
+    <!-- ═══ COLUMN 3: CONTROL RIG ═══ -->
+    <div style="
+      background:rgba(8,8,10,0.97);
+      border-left:1px solid rgba(255,255,255,0.06);
+      overflow-y:auto;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(255,255,255,0.1) transparent;
+    ">
+      <!-- Rig header -->
+      <div style="padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:10px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,0.3);text-transform:uppercase">Control Rig</span>
+        <span id="rigActiveLayer" style="font-size:10px;font-weight:700;color:#D4A017">Frame Skin</span>
+      </div>
+
+      <!-- ACCORDION: Skin Attributes -->
+      <div class="rig-accordion open" id="acc-identity">
+        <div class="rig-acc-header" onclick="toggleAccordion('acc-identity')">
+          <span class="rig-acc-icon">▼</span>
+          <span>Skin Attributes</span>
+        </div>
+        <div class="rig-acc-body">
+          <div class="rig-field">
+            <label class="rig-label">Name</label>
+            <input class="rig-input" id="skinName" type="text" placeholder="e.g. Dragon Fire" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Tier</label>
+            <div class="rig-tier-pills">
+              <div class="rig-tier-pill active" data-tier="standard" onclick="setTierPill(this,'standard')">STD</div>
+              <div class="rig-tier-pill" data-tier="rare" onclick="setTierPill(this,'rare')" style="--pill-color:#6ee7f7">RARE</div>
+              <div class="rig-tier-pill" data-tier="epic" onclick="setTierPill(this,'epic')" style="--pill-color:#a855f7">EPIC</div>
+              <div class="rig-tier-pill" data-tier="mythic" onclick="setTierPill(this,'mythic')" style="--pill-color:#ff6b6b">MYTH</div>
+            </div>
+            <input type="hidden" id="skinTier" value="standard" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Badge Label</label>
+            <input class="rig-input" id="skinBadgeLabel" type="text" placeholder="MYTHIC" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCORDION: Material & Lighting -->
+      <div class="rig-accordion open" id="acc-material">
+        <div class="rig-acc-header" onclick="toggleAccordion('acc-material')">
+          <span class="rig-acc-icon">▼</span>
+          <span>Material &amp; Lighting</span>
+        </div>
+        <div class="rig-acc-body">
+          <div class="rig-field">
+            <label class="rig-label">Glow Color</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="color" id="skinGlowColor" value="#D4A017" oninput="updatePreview(); updateJSONDock()" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:none;cursor:pointer;padding:3px" />
+              <span id="skinGlowColorHex" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);font-family:monospace">#D4A017</span>
+            </div>
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Glow Intensity <span class="rig-val" id="valGlowIntensity">0.30</span></label>
+            <input type="range" class="rig-slider" id="skinGlowIntensity" min="0" max="1" step="0.05" value="0.3" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Pulse Speed <span class="rig-val" id="valGlowSpeed">3.5s</span></label>
+            <input type="range" class="rig-slider" id="skinGlowSpeed" min="0.5" max="10" step="0.5" value="3.5" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Frame Color</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="color" id="skinFrameColor" value="#D4A017" oninput="updatePreview(); updateJSONDock()" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:none;cursor:pointer;padding:3px" />
+              <span id="skinFrameColorHex" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);font-family:monospace">#D4A017</span>
+            </div>
+          </div>
+          <div class="rig-field">
+            <label class="rig-label" style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="skinFrameAnimated" style="accent-color:#D4A017;width:14px;height:14px" onchange="updatePreview(); updateJSONDock()" />
+              Animated Gradient Frame
+            </label>
+          </div>
+          <div id="gradientColorFields">
+            <div class="rig-field">
+              <label class="rig-label">Gradient Color 2</label>
+              <input type="color" id="skinFrameColor2" value="#6ee7f7" oninput="updatePreview(); updateJSONDock()" style="width:100%;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:none;cursor:pointer;padding:3px" />
+            </div>
+            <div class="rig-field">
+              <label class="rig-label">Gradient Color 3</label>
+              <input type="color" id="skinFrameColor3" value="#a855f7" oninput="updatePreview(); updateJSONDock()" style="width:100%;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:none;cursor:pointer;padding:3px" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCORDION: Mythic Geometry -->
+      <div class="rig-accordion" id="acc-geometry">
+        <div class="rig-acc-header" onclick="toggleAccordion('acc-geometry')">
+          <span class="rig-acc-icon">▶</span>
+          <span>Mythic Geometry</span>
+          <span style="margin-left:auto;font-size:9px;color:rgba(255,100,100,0.6);font-weight:700">MYTHIC ONLY</span>
+        </div>
+        <div class="rig-acc-body" style="display:none">
+          <div class="rig-field">
+            <label class="rig-label">Frame Width <span class="rig-val" id="valFrameWidth">2px</span></label>
+            <input type="range" class="rig-slider" id="skinFrameWidth" min="0" max="8" step="1" value="2" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Breakout Offset <span class="rig-val" id="valBreakoutOffset">20px</span></label>
+            <input type="range" class="rig-slider" id="skinBreakoutOffset" min="0" max="80" step="2" value="20" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Bleed Scale <span class="rig-val" id="valBreakoutScale">1.00x</span></label>
+            <input type="range" class="rig-slider" id="skinBreakoutScale" min="0.5" max="2.5" step="0.05" value="1" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Rotation <span class="rig-val" id="valBleedRotation">0°</span></label>
+            <input type="range" class="rig-slider" id="skinBleedRotation" min="0" max="360" step="5" value="0" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+          <div class="rig-field">
+            <label class="rig-label">Pulse Speed <span class="rig-val" id="valBreakoutSpeed">4.0s</span></label>
+            <input type="range" class="rig-slider" id="skinBreakoutSpeed" min="0.5" max="12" step="0.5" value="4" oninput="updatePreview(); updateJSONDock()" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end right col -->
+
+    <!-- ═══ BOTTOM: JSON DOCK ═══ -->
+    <div id="jsonDock" style="
+      grid-column:1/-1;
+      background:rgba(4,4,6,0.98);
+      border-top:1px solid rgba(212,160,23,0.2);
+      display:flex;flex-direction:column;
+      transition:height 0.3s ease;
+      height:0;overflow:hidden;
+    ">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0">
+        <span style="font-size:10px;font-weight:800;letter-spacing:2px;color:rgba(212,160,23,0.7);text-transform:uppercase">JSON Config Output</span>
+        <div style="width:6px;height:6px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71"></div>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3)">Live</span>
+        <button onclick="copyJSONConfig()" style="margin-left:auto;background:rgba(212,160,23,0.1);border:1px solid rgba(212,160,23,0.3);border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;color:#D4A017;cursor:pointer;font-family:Inter,sans-serif">Copy JSON</button>
+      </div>
+      <pre id="jsonDockOutput" style="
+        flex:1;overflow:auto;margin:0;
+        padding:16px 20px;
+        font-family:'Fira Code',monospace,monospace;
+        font-size:11px;line-height:1.7;
+        color:#a8ff78;
+        background:transparent;
+        border:none;
+        outline:none;
+        white-space:pre;
+      "></pre>
+    </div>
+
+  </div><!-- end 3-col grid -->
+
+  <!-- JSON DOCK TOGGLE (floating above bottom) -->
+  <div onclick="toggleJSONDock()" style="
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+    z-index:100;cursor:pointer;
+    background:rgba(4,4,6,0.95);
+    border:1px solid rgba(212,160,23,0.3);
+    border-bottom:none;
+    border-radius:10px 10px 0 0;
+    padding:6px 24px;
+    display:flex;align-items:center;gap:8px;
+    font-size:11px;font-weight:700;color:rgba(212,160,23,0.7);
+    backdrop-filter:blur(10px);
+    transition:all 0.2s;
+    letter-spacing:1px;
+  " id="jsonDockToggleBtn"
+    onmouseover="this.style.background='rgba(212,160,23,0.1)'"
+    onmouseout="this.style.background='rgba(4,4,6,0.95)'"
+  >
+    <span id="jsonDockArrow">▲</span> JSON DOCK
+  </div>
+
+    <div class="nav-item" data-screen="shop"><i class="ti ti-shopping-bag"></i>Shop</div>
+    <div class="nav-item" data-screen="portfolio"><i class="ti ti-user"></i>Profile</div>
+  </nav>
+
+
+        </div><!-- adminTab-skinStudio -->
+
+        </div><!-- screen-admin -->
       </div><!-- screen-wrap -->
     </div><!-- main-area -->
   </div><!-- app-layout -->
 
   <!-- MOBILE BOTTOM NAV -->
   <nav class="bottom-nav">
-    <div class="nav-item active" data-screen="dashboard"><i class="ti ti-layout-grid"></i>Stash</div>
-    <div class="nav-item" data-screen="marketplace"><i class="ti ti-world"></i>Market</div>
+    <div class="nav-item active" data-screen="dashboard" onclick="switchScreen('dashboard')"><i class="ti ti-layout-grid"></i><span>Stash</span></div>
+    <div class="nav-item" data-screen="marketplace" onclick="switchScreen('marketplace')"><i class="ti ti-world"></i><span>Market</span></div>
     <div class="nav-item"><div class="nav-add-btn" onclick="openListingModal()"><i class="ti ti-plus"></i></div></div>
-    <div class="nav-item" data-screen="shop"><i class="ti ti-shopping-bag"></i>Shop</div>
-    <div class="nav-item" data-screen="portfolio"><i class="ti ti-user"></i>Profile</div>
+    <div class="nav-item" data-screen="shop" onclick="switchScreen('shop')"><i class="ti ti-shopping-bag"></i><span>Shop</span></div>
+    <div class="nav-item" data-screen="portfolio" onclick="switchScreen('portfolio')"><i class="ti ti-user"></i><span>Profile</span></div>
   </nav>
 
 </div><!-- appWrap -->
