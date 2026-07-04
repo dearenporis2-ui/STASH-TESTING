@@ -1239,5 +1239,23 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script type="module" src="app.js"></script>
+<script>
+  // Emergency fallback — if app.js module fails to load entirely,
+  // hide the loading screen after 6 seconds so users aren't stuck
+  window.__emergencyHide = setTimeout(function() {
+    var s = document.getElementById('loadingScreen');
+    if (s && s.style.display !== 'none') {
+      s.style.opacity = '0';
+      s.style.transition = 'opacity 0.5s';
+      setTimeout(function() { s.style.display = 'none'; }, 500);
+      // Show a basic error message
+      document.getElementById('authWrap').style.display = 'flex';
+      var err = document.createElement('div');
+      err.style.cssText = 'position:fixed;top:20px;right:20px;background:#ff4d4d;color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:99999;font-family:Inter,sans-serif';
+      err.textContent = 'App failed to load. Please hard refresh (Ctrl+Shift+R).';
+      document.body.appendChild(err);
+    }
+  }, 6000);
+</script>
 </body>
 </html>
