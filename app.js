@@ -1643,7 +1643,7 @@ async function loadAdminData() {
     }
 
     // Skin sync starts once admin opens the panel — keeps it live everywhere
-    startSkinSync(() => { renderAdminSkinsList(); });
+    startSkinSync(() => { renderAdminSkinsList(); renderStudioSkinList(); });
     initSkinStudioPreview();
     renderAdminSkinsList();
   } catch (err) { showToast('Admin load error: ' + err.message, 'error'); }
@@ -1675,6 +1675,212 @@ function setAdminTab(el, tab) {
 let editingSkinId = null;
 let previewBgMode = 'dark';
 
+
+// ═══════════════════════════════════════════
+// SKIN STUDIO — GAME ENGINE SANDBOX JS
+// ═══════════════════════════════════════════
+
+// ── Parallax mouse tracking ──
+function handleParallax(e) {
+  const stage = document.getElementById('studioCardStage');
+  const inner = document.getElementById('studioCardInner');
+  const coords = document.getElementById('studioCoords');
+  if (!stage || !inner) return;
+
+  const rect = stage.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = (e.clientX - cx) / (rect.width / 2);   // -1 to +1
+  const dy = (e.clientY - cy) / (rect.height / 2);  // -1 to +1
+
+  const maxTilt = 18;
+  const rotX = (-dy * maxTilt).toFixed(2);
+  const rotY = (dx * maxTilt).toFixed(2);
+  const deg = Math.sqrt(dx * dx + dy * dy) * maxTilt;
+
+  inner.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.04)`;
+  inner.style.transition = 'transform 0.05s ease';
+
+  if (coords) {
+    coords.textContent = `X: ${dx.toFixed(2)} · Y: ${dy.toFixed(2)} · ROT: ${deg.toFixed(1)}°`;
+  }
+}
+
+function resetParallax() {
+  const inner = document.getElementById('studioCardInner');
+  const coords = document.getElementById('studioCoords');
+  if (inner) {
+    inner.style.transition = 'transform 0.5s cubic-bezier(0.4,0,0.2,1)';
+    inner.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) scale(1)';
+  }
+  if (coords) coords.textContent = 'X: 0.00 · Y: 0.00 · ROT: 0°';
+}
+
+// ── Layer tree: toggle eye / select layer ──
+function toggleLayer(e, layerId) {
+  e.stopPropagation();
+  const eyeEl = e.currentTarget;
+  const isHidden = eyeEl.classList.toggle('hidden');
+  const previewEl = document.getElementById('sce-preview');
+  if (!previewEl) return;
+
+  const layerMap = {
+    bg: '.sce-layer-bg',
+    asset: '.sce-layer-asset',
+    frame: '.sce-layer-frame',
+    breakout: '.sce-layer-breakout',
+    badge: '.sce-tier-badge, .sce-layer-footer'
+  };
+  const sel = layerMap[layerId];
+  if (!sel) return;
+  previewEl.querySelectorAll(sel).forEach(el => {
+    el.style.opacity = isHidden ? '0' : '1';
+    el.style.transition = 'opacity 0.2s';
+  });
+}
+
+function selectLayer(rowEl) {
+  document.querySelectorAll('.layer-row').forEach(r => r.classList.remove('selected'));
+  rowEl.classList.add('selected');
+  const layer = rowEl.dataset.layer;
+  const labels = {
+    bg: 'Glow & Shader', asset: 'Core Asset',
+    frame: 'Frame Skin', breakout: 'Bleed & Breakout', badge: 'Badge & Metadata'
+  };
+  setText('rigActiveLayer', labels[layer] || layer);
+}
+
+// ── Tier pill selector ──
+function setTierPill(el, tier) {
+  document.querySelectorAll('.rig-tier-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('skinTier').value = tier;
+
+  // Auto-expand Mythic Geometry accordion for mythic tier
+  const geoAcc = document.getElementById('acc-geometry');
+  if (geoAcc) {
+    const body = geoAcc.querySelector('.rig-acc-body');
+    const icon = geoAcc.querySelector('.rig-acc-icon');
+    if (tier === 'mythic') {
+      if (body) body.style.display = 'flex';
+      if (icon) icon.textContent = '▼';
+      geoAcc.classList.add('open');
+    }
+  }
+  updatePreview();
+  updateJSONDock();
+}
+
+// ── Accordion toggle ──
+function toggleAccordion(accId) {
+  const acc = document.getElementById(accId);
+  if (!acc) return;
+  const body = acc.querySelector('.rig-acc-body');
+  const icon = acc.querySelector('.rig-acc-icon');
+  const isOpen = acc.classList.toggle('open');
+  if (body) body.style.display = isOpen ? 'flex' : 'none';
+  if (icon) icon.textContent = isOpen ? '▼' : '▶';
+}
+
+// ── JSON Dock ──
+let jsonDockOpen = false;
+
+function toggleJSONDock() {
+  jsonDockOpen = !jsonDockOpen;
+  const dock = document.getElementById('jsonDock');
+  const arrow = document.getElementById('jsonDockArrow');
+  if (dock) dock.style.height = jsonDockOpen ? '220px' : '0';
+  if (arrow) arrow.textContent = jsonDockOpen ? '▼' : '▲';
+  if (jsonDockOpen) updateJSONDock();
+}
+
+function updateJSONDock() {
+  if (!jsonDockOpen) return;
+  const config = readSkinFormConfig();
+  const out = document.getElementById('jsonDockOutput');
+  if (!out) return;
+
+  // Pretty-print with syntax highlighting via color spans
+  const json = JSON.stringify(config, null, 2);
+  // Simple colorizer: keys gold, strings green, numbers cyan, booleans purple
+  const colored = json
+    .replace(/"([^"]+)":/g, '<span style="color:#D4A017">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span style="color:#a8ff78">"$1"</span>')
+    .replace(/: ([\d.]+)/g, ': <span style="color:#6ee7f7">$1</span>')
+    .replace(/: (true|false)/g, ': <span style="color:#a855f7">$1</span>');
+  out.innerHTML = colored;
+}
+
+function copyJSONConfig() {
+  const config = readSkinFormConfig();
+  navigator.clipboard.writeText(JSON.stringify(config, null, 2))
+    .then(() => showToast('JSON config copied!', 'success'))
+    .catch(() => showToast('Copy failed', 'error'));
+}
+
+// ── Studio skin list in left column ──
+function renderStudioSkinList() {
+  const list = document.getElementById('studioSkinList');
+  if (!list) return;
+  const skins = getAllSkins().filter(s => s.id !== 'default');
+  if (skins.length === 0) {
+    list.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.25);padding:8px 10px">No skins yet</div>';
+    return;
+  }
+  list.innerHTML = skins.map(s => {
+    const color = s.tier === 'mythic' ? '#ff6b6b'
+      : s.tier === 'epic' ? '#a855f7'
+      : s.tier === 'rare' ? '#6ee7f7' : '#D4A017';
+    return `
+      <div class="studio-skin-item" onclick="loadSkinIntoStudio('${s.id}')">
+        <div class="studio-skin-dot" style="background:${color}"></div>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.name)}</span>
+        <span style="margin-left:auto;font-size:9px;opacity:.5">${s.tier.toUpperCase()}</span>
+      </div>`;
+  }).join('');
+}
+
+// ── Preview background toggle ──
+function setPreviewBg(el, mode) {
+  document.querySelectorAll('#adminTab-skinStudio .filter-chip').forEach(c => {
+    if (c.textContent.includes('BG') || c.textContent.includes('blur') || c.textContent.includes('grid') || c.textContent.includes('dark')) c.classList.remove('active');
+  });
+  el.classList.add('active');
+  previewBgMode = mode;
+  const bg = document.getElementById('studioCanvasBg');
+  if (!bg) return;
+  if (mode === 'grid') {
+    bg.style.background = `
+      radial-gradient(ellipse 60% 50% at 50% 50%, rgba(212,160,23,0.04) 0%, transparent 70%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 40px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 40px),
+      #080809`;
+  } else if (mode === 'blur') {
+    bg.style.background = 'radial-gradient(ellipse 80% 80% at 50% 50%, rgba(212,160,23,0.08) 0%, rgba(8,8,9,0.95) 70%), #080809';
+  } else {
+    bg.style.background = `
+      radial-gradient(ellipse 60% 50% at 50% 50%, rgba(212,160,23,0.04) 0%, transparent 70%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 40px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 40px),
+      #080809`;
+  }
+}
+
+// ── Color hex readout updates ──
+function watchColorInputs() {
+  const pairs = [
+    ['skinGlowColor', 'skinGlowColorHex'],
+    ['skinFrameColor', 'skinFrameColorHex']
+  ];
+  pairs.forEach(([inputId, hexId]) => {
+    const input = document.getElementById(inputId);
+    const hex = document.getElementById(hexId);
+    if (input && hex) {
+      input.addEventListener('input', () => { hex.textContent = input.value.toUpperCase(); });
+    }
+  });
+}
+
 function initSkinStudioPreview() {
   const mount = document.getElementById('skinPreviewMount');
   if (!mount) return;
@@ -1700,7 +1906,9 @@ function initSkinStudioPreview() {
 
   mount.style.padding = '24px';
   mount.style.borderRadius = '16px';
+  watchColorInputs();
   updatePreview();
+  updateJSONDock();
 }
 
 function applyPreviewBgStyle() {
@@ -1907,7 +2115,8 @@ function loadSkinIntoStudio(skinId) {
 
   updatePreview();
   showToast(`Editing "${s.name}"`, 'info');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateJSONDock();
+  renderStudioSkinList();
 }
 
 let pendingDeleteSkinId = null;
@@ -2233,6 +2442,16 @@ window.setPreviewBg = setPreviewBg;
 window.saveCurrentSkin = saveCurrentSkin;
 window.loadSkinIntoStudio = loadSkinIntoStudio;
 window.confirmDeleteSkin = confirmDeleteSkin;
+window.handleParallax = handleParallax;
+window.resetParallax = resetParallax;
+window.toggleLayer = toggleLayer;
+window.selectLayer = selectLayer;
+window.setTierPill = setTierPill;
+window.toggleAccordion = toggleAccordion;
+window.toggleJSONDock = toggleJSONDock;
+window.updateJSONDock = updateJSONDock;
+window.copyJSONConfig = copyJSONConfig;
+window.setPreviewBg = setPreviewBg;
 window.copyProfileLink = copyProfileLink;
 window.showToast = showToast;
 window.openEditProfile = openEditProfile;
