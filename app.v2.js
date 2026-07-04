@@ -1743,12 +1743,11 @@ let previewBgMode = 'dark';
 // SKIN STUDIO — GAME ENGINE SANDBOX JS
 // ═══════════════════════════════════════════
 
-// ── Parallax mouse tracking ──
+// ── Parallax mouse tracking — different coefficients per layer ──
 function handleParallax(e) {
   const stage = document.getElementById('studioCardStage');
-  const inner = document.getElementById('studioCardInner');
   const coords = document.getElementById('studioCoords');
-  if (!stage || !inner) return;
+  if (!stage) return;
 
   const rect = stage.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
@@ -1756,26 +1755,37 @@ function handleParallax(e) {
   const dx = (e.clientX - cx) / (rect.width / 2);   // -1 to +1
   const dy = (e.clientY - cy) / (rect.height / 2);  // -1 to +1
 
-  const maxTilt = 18;
-  const rotX = (-dy * maxTilt).toFixed(2);
-  const rotY = (dx * maxTilt).toFixed(2);
-  const deg = Math.sqrt(dx * dx + dy * dy) * maxTilt;
+  // Layer A: card core — moderate tilt
+  const coreRotX = (-dy * 14).toFixed(2);
+  const coreRotY = (dx * 14).toFixed(2);
+  const cardCore = document.getElementById('card-core');
+  if (cardCore) {
+    cardCore.style.transform = `perspective(900px) rotateX(${coreRotX}deg) rotateY(${coreRotY}deg) translateZ(0px)`;
+  }
 
-  inner.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.04)`;
-  inner.style.transition = 'transform 0.05s ease';
+  // Layer B: breakout spikes — MORE aggressive tilt + Z-lift = floating above card
+  const spikeRotX = (-dy * 26).toFixed(2);
+  const spikeRotY = (dx * 26).toFixed(2);
+  const spikeShiftX = (dx * 12).toFixed(1);
+  const spikeShiftY = (dy * 8).toFixed(1);
+  const breakoutLayer = document.getElementById('breakout-layer');
+  if (breakoutLayer) {
+    breakoutLayer.style.transform = `perspective(900px) rotateX(${spikeRotX}deg) rotateY(${spikeRotY}deg) translate(${spikeShiftX}px, ${spikeShiftY}px) translateZ(20px)`;
+  }
 
   if (coords) {
+    const deg = Math.sqrt(dx*dx + dy*dy) * 20;
     coords.textContent = `X: ${dx.toFixed(2)} · Y: ${dy.toFixed(2)} · ROT: ${deg.toFixed(1)}°`;
   }
 }
 
 function resetParallax() {
-  const inner = document.getElementById('studioCardInner');
+  const cardCore = document.getElementById('card-core');
+  const breakoutLayer = document.getElementById('breakout-layer');
   const coords = document.getElementById('studioCoords');
-  if (inner) {
-    inner.style.transition = 'transform 0.5s cubic-bezier(0.4,0,0.2,1)';
-    inner.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) scale(1)';
-  }
+  const ease = 'transform 0.5s cubic-bezier(0.4,0,0.2,1)';
+  if (cardCore) { cardCore.style.transition = ease; cardCore.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg)'; }
+  if (breakoutLayer) { breakoutLayer.style.transition = ease; breakoutLayer.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg) translate(0,0) translateZ(20px)'; }
   if (coords) coords.textContent = 'X: 0.00 · Y: 0.00 · ROT: 0°';
 }
 
@@ -1948,27 +1958,89 @@ function initSkinStudioPreview() {
   const mount = document.getElementById('skinPreviewMount');
   if (!mount) return;
 
-  // Build the preview card inline — no engine dependency so it always works
+  // ─────────────────────────────────────────────────────
+  // CORRECT MYTHIC ARCHITECTURE:
+  // .card-container  → grid inhabitant, overflow:VISIBLE
+  //   ├── #card-core      → the actual card body, z-index:1
+  //   ├── #breakout-layer → LARGER than card, overflows freely, z-index:2
+  //   └── #sparkle-layer  → canvas for particles, z-index:3
+  // ─────────────────────────────────────────────────────
   mount.innerHTML = `
-    <div id="sce-preview" class="stash-card-engine" data-tier="standard" style="
-      position:relative; width:100%; aspect-ratio:1;
-      border-radius:16px; overflow:visible; isolation:isolate;
+    <div id="card-container" style="
+      position:relative;
+      width:200px; height:200px;
+      overflow:visible;
+      transform-style:preserve-3d;
     ">
-      <div class="sce-layer-bg"></div>
-      <div class="sce-layer-asset" style="position:absolute;inset:8%;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);font-size:48px;z-index:2">⌚</div>
-      <div class="sce-layer-frame" style="position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:3"></div>
-      <div class="sce-layer-breakout" style="position:absolute;inset:0;overflow:visible;pointer-events:none;z-index:4;display:none">
-        <div class="sce-breakout-spikes"></div>
+      <!-- LAYER A: Card Core — stays inside grid bounds -->
+      <div id="card-core" style="
+        position:absolute;
+        inset:0;
+        border-radius:16px;
+        overflow:hidden;
+        z-index:1;
+        transform-style:preserve-3d;
+        will-change:transform;
+        transition:transform 0.08s ease;
+        background:#111114;
+      ">
+        <!-- Glow bg -->
+        <div id="card-glow" style="
+          position:absolute; inset:-20%; border-radius:50%;
+          background:radial-gradient(ellipse 70% 70% at 50% 50%, #D4A017 0%, transparent 70%);
+          opacity:0.15; filter:blur(20px); pointer-events:none; z-index:0;
+          animation:sce-breathe 3.5s ease-in-out infinite;
+        "></div>
+        <!-- Asset -->
+        <div style="position:absolute;inset:10%;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:52px;z-index:1">⌚</div>
+        <!-- Frame border (inside card-core so it clips cleanly) -->
+        <div id="card-frame-inner" style="
+          position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:2;
+          border:2px solid #D4A017;
+          box-shadow:0 0 12px #D4A017, inset 0 0 6px rgba(212,160,23,0.1);
+        "></div>
+        <!-- Footer -->
+        <div style="position:absolute;left:0;right:0;bottom:0;z-index:3;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,0.85),transparent)">
+          <div style="font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Rolex Daytona</div>
+          <div id="previewPrice" style="font-size:13px;font-weight:800;color:#D4A017">SCR 38,500</div>
+        </div>
+        <!-- Badge -->
+        <div id="previewBadge" style="display:none;position:absolute;top:8px;right:8px;z-index:4;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:6px;background:rgba(212,160,23,0.15);border:1px solid rgba(212,160,23,0.4);color:#D4A017"></div>
       </div>
-      <div class="sce-tier-badge" id="previewBadge" style="display:none"></div>
-      <div style="position:absolute;left:0;right:0;bottom:0;z-index:5;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,0.75),transparent);border-radius:0 0 16px 16px">
-        <div style="font-size:12px;font-weight:700;color:#fff">Rolex Daytona</div>
-        <div id="previewPrice" style="font-size:13px;font-weight:800;color:#D4A017">SCR 38,500</div>
+
+      <!-- LAYER B: Mythic Breakout — LARGER than card, bleeds freely into dashboard -->
+      <div id="breakout-layer" style="
+        position:absolute;
+        width:200%; height:200%;
+        top:-50%; left:-50%;
+        pointer-events:none;
+        z-index:2;
+        overflow:visible;
+        display:none;
+        transform-style:preserve-3d;
+        will-change:transform;
+        transition:transform 0.05s ease;
+      ">
+        <div id="breakout-svg-wrap" style="position:absolute;inset:0;overflow:visible"></div>
       </div>
+
+      <!-- LAYER C: Sparkle canvas — covers full expanded area -->
+      <canvas id="sparkle-canvas" style="
+        position:absolute;
+        width:200%; height:200%;
+        top:-50%; left:-50%;
+        pointer-events:none;
+        z-index:3;
+        overflow:visible;
+      "></canvas>
     </div>`;
 
-  mount.style.padding = '24px';
-  mount.style.borderRadius = '16px';
+  mount.style.padding = '60px';
+  mount.style.display = 'flex';
+  mount.style.alignItems = 'center';
+  mount.style.justifyContent = 'center';
+
+  // Wire the parallax to the stage div (already in HTML)
   watchColorInputs();
   updatePreview();
   updateJSONDock();
@@ -2026,12 +2098,12 @@ function hexToRgba(hex, alpha) {
 // this is the "instant repaint" requirement, driven entirely by reading
 // the form and writing CSS custom properties, no rebuild of the DOM.
 function updatePreview() {
-  // Update readout labels with units
+  // Readout labels
   const labelMap = {
     valGlowIntensity: ['skinGlowIntensity', ''],
-    valGlowSpeed: ['skinGlowSpeed', 's'],
-    valFrameWidth: ['skinFrameWidth', 'px'],
-    valBreakoutOffset: ['skinBreakoutOffset', 'px'],
+    valGlowSpeed:     ['skinGlowSpeed', 's'],
+    valFrameWidth:    ['skinFrameWidth', 'px'],
+    valBreakoutOffset:['skinBreakoutOffset', 'px'],
     valBreakoutScale: ['skinBreakoutScale', 'x'],
     valBleedRotation: ['skinBleedRotation', '°'],
     valBreakoutSpeed: ['skinBreakoutSpeed', 's']
@@ -2039,224 +2111,241 @@ function updatePreview() {
   Object.entries(labelMap).forEach(([labelId, [inputId, unit]]) => {
     const input = document.getElementById(inputId);
     const label = document.getElementById(labelId);
-    if (input && label) label.textContent = parseFloat(input.value).toFixed(
-      unit === 'px' || unit === '°' ? 0 : unit === 'x' ? 2 : 1
-    ) + unit;
+    if (input && label) {
+      const v = parseFloat(input.value);
+      label.textContent = (unit === 'px' || unit === '°' ? Math.round(v) : v.toFixed(unit === 'x' ? 2 : 1)) + unit;
+    }
   });
 
   const config = readSkinFormConfig();
-  const previewEl = document.getElementById('sce-preview');
-  if (!previewEl) return;
 
-  previewEl.dataset.tier = config.tier;
+  // ── LAYER A: Card Core updates ──
+  const cardGlow = document.getElementById('card-glow');
+  if (cardGlow) {
+    cardGlow.style.background = `radial-gradient(ellipse 70% 70% at 50% 50%, ${config.glowColor} 0%, transparent 70%)`;
+    cardGlow.style.opacity = config.glowIntensity;
+    cardGlow.style.animationDuration = config.glowSpeed + 's';
+  }
 
-  // ── Batch write all CSS vars ──
-  const cssVars = {
-    '--glow-color': config.glowColor,
-    '--glow-intensity': config.glowIntensity,
-    '--glow-speed': config.glowSpeed + 's',
-    '--frame-color': config.frameColor,
-    '--frame-color-1': config.frameColor1 || config.frameColor,
-    '--frame-color-2': config.frameColor2,
-    '--frame-color-3': config.frameColor3,
-    '--gradient-speed': '5s',
-    '--frame-shadow-blur': (config.frameWidth * 4) + 'px',
-    '--breakout-offset': config.breakoutOffset + 'px',
-    '--breakout-scale': config.breakoutScale,
-    '--breakout-opacity': 0.9,
-    '--breakout-speed': config.breakoutSpeed + 's',
-    '--bleed-rotation': config.bleedRotation + 'deg',
-    '--badge-bg': config.badgeBg,
-    '--badge-border': config.badgeBorder,
-    '--badge-color': config.badgeColor
-  };
-  Object.entries(cssVars).forEach(([k, v]) => previewEl.style.setProperty(k, v));
-
-  // ── Frame layer — override inline style completely ──
-  const frameLayer = previewEl.querySelector('.sce-layer-frame');
-  if (frameLayer) {
-    frameLayer.classList.toggle('sce-frame-animated', !!config.frameAnimated);
+  const frameInner = document.getElementById('card-frame-inner');
+  if (frameInner) {
     if (config.frameAnimated) {
-      // Animated holo gradient border
-      frameLayer.style.cssText = `
-        position:absolute; inset:0; border-radius:16px; pointer-events:none; z-index:3;
-        background: linear-gradient(${config.bleedRotation || 120}deg,
-          ${config.frameColor1||config.frameColor},
-          ${config.frameColor2},
-          ${config.frameColor3},
-          ${config.frameColor1||config.frameColor}
-        );
-        background-size: 300% 300%;
-        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor; mask-composite: exclude;
-        padding: ${config.frameWidth}px;
-        animation: sce-gradient-shift 5s ease infinite;
-        box-shadow: 0 0 ${config.frameWidth * 6}px ${config.frameColor};
+      frameInner.style.cssText = `
+        position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:2;
+        background:linear-gradient(${config.bleedRotation||120}deg,${config.frameColor1||config.frameColor},${config.frameColor2},${config.frameColor3},${config.frameColor1||config.frameColor});
+        background-size:300% 300%;
+        -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+        -webkit-mask-composite:xor;mask-composite:exclude;
+        padding:${config.frameWidth}px;
+        animation:sce-gradient-shift 5s ease infinite;
+        box-shadow:0 0 ${config.frameWidth*5}px ${config.frameColor};
       `;
     } else {
-      frameLayer.style.cssText = `
-        position:absolute; inset:0; border-radius:16px; pointer-events:none; z-index:3;
-        border: ${config.frameWidth}px solid ${config.frameColor};
-        box-shadow: 0 0 ${config.frameWidth * 5}px ${config.frameColor},
-                    inset 0 0 ${config.frameWidth * 3}px rgba(255,255,255,0.05);
-        animation: none; background: none; padding: 0;
+      frameInner.style.cssText = `
+        position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:2;
+        border:${config.frameWidth}px solid ${config.frameColor};
+        box-shadow:0 0 ${config.frameWidth*5}px ${config.frameColor},inset 0 0 ${config.frameWidth*2}px rgba(255,255,255,0.06);
       `;
     }
   }
 
-  // ── Glow bg layer ──
-  const bgLayer = previewEl.querySelector('.sce-layer-bg');
-  if (bgLayer) {
-    bgLayer.style.cssText = `
-      position:absolute; inset:-20%; border-radius:50%; pointer-events:none; z-index:1;
-      background: radial-gradient(ellipse 70% 70% at 50% 50%, ${config.glowColor} 0%, transparent 70%);
-      opacity: ${config.glowIntensity};
-      filter: blur(20px);
-      animation: sce-breathe ${config.glowSpeed}s ease-in-out infinite;
-    `;
-  }
+  const price = document.getElementById('previewPrice');
+  if (price) price.style.color = config.glowColor;
 
-  // ── Sparkle layer — always present, intensity driven by glow intensity ──
-  let sparkleCanvas = previewEl.querySelector('.sce-sparkle-canvas');
-  if (!sparkleCanvas) {
-    sparkleCanvas = document.createElement('canvas');
-    sparkleCanvas.className = 'sce-sparkle-canvas';
-    sparkleCanvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;border-radius:16px;overflow:visible;width:100%;height:100%';
-    previewEl.appendChild(sparkleCanvas);
-  }
-  runSparkleEffect(sparkleCanvas, config.glowColor, config.glowIntensity);
-
-  // ── Mythic breakout — visual spike ring ──
-  const breakoutLayer = previewEl.querySelector('.sce-layer-breakout');
-  const spikes = previewEl.querySelector('.sce-breakout-spikes');
-  if (breakoutLayer && spikes) {
-    if (config.tier === 'mythic') {
-      breakoutLayer.style.display = 'block';
-      const offset = config.breakoutOffset;
-      const scale = config.breakoutScale;
-      const rot = config.bleedRotation;
-      const color = config.glowColor;
-      spikes.style.cssText = `
-        position:absolute;
-        inset: -${offset}px;
-        pointer-events:none;
-        opacity: 0.9;
-        transform: scale(${scale}) rotate(${rot}deg);
-        filter: drop-shadow(0 0 8px ${color});
-        animation: sce-breakout-pulse ${config.breakoutSpeed}s ease-in-out infinite;
-        background: none;
-      `;
-      // Draw spike SVG pattern
-      spikes.innerHTML = generateSpikesSVG(color, offset);
-    } else {
-      breakoutLayer.style.display = 'none';
-      spikes.innerHTML = '';
-    }
-  }
-
-  // ── Badge ──
   const badge = document.getElementById('previewBadge');
   if (badge) {
     if (config.badgeLabel && config.tier !== 'standard') {
-      badge.style.cssText = `display:block;position:absolute;top:8px;right:8px;z-index:6;
-        font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
-        padding:3px 8px;border-radius:6px;
-        background:${config.badgeBg};border:1px solid ${config.badgeBorder};color:${config.badgeColor};`;
+      badge.style.display = 'block';
       badge.textContent = config.badgeLabel;
+      badge.style.background = hexToRgba(config.glowColor, 0.15);
+      badge.style.borderColor = hexToRgba(config.glowColor, 0.4);
+      badge.style.color = config.glowColor;
     } else {
       badge.style.display = 'none';
     }
   }
 
-  // ── Price color ──
-  const price = document.getElementById('previewPrice');
-  if (price) price.style.color = config.glowColor;
+  // ── LAYER B: Mythic Breakout ──
+  const breakoutLayer = document.getElementById('breakout-layer');
+  const svgWrap = document.getElementById('breakout-svg-wrap');
+  if (breakoutLayer && svgWrap) {
+    if (config.tier === 'mythic') {
+      breakoutLayer.style.display = 'block';
+      svgWrap.innerHTML = generateMythicBreakoutSVG(config);
+    } else {
+      breakoutLayer.style.display = 'none';
+      svgWrap.innerHTML = '';
+    }
+  }
+
+  // ── LAYER C: Sparkle canvas ──
+  const canvas = document.getElementById('sparkle-canvas');
+  if (canvas) runSparkleEffect(canvas, config.glowColor, config.glowIntensity);
 
   updateJSONDock();
 }
 
-// Generates a ring of SVG spikes around the card
-function generateSpikesSVG(color, offset) {
-  const count = 24;
-  const cx = 50, cy = 50;
-  const r1 = 50, r2 = 50 + (offset / 2.2);
+// Generates aggressive, ASYMMETRIC spike clusters that physically blast
+// outside the card boundaries. Uses the breakout-layer's 200%/200% space.
+// Coordinates are in the breakout-layer's space where (50%,50%) = card center.
+function generateMythicBreakoutSVG(config) {
+  const color = config.glowColor;
+  const offset = config.breakoutOffset; // how far spikes reach past card edge
+  const scale = config.breakoutScale;
+  const rot = (config.bleedRotation || 0) * (Math.PI / 180);
+
+  // The card occupies the center 50% of the breakout layer (25%→75%)
+  // Spikes originate from card edges and blast outward
+  const cardX1 = 25, cardY1 = 25, cardX2 = 75, cardY2 = 75;
+  const cx = 50, cy = 50; // center
+
+  // spike reach in percentage units of the 200x200 space
+  const reach = offset * 0.35 * scale;
+
   let paths = '';
-  for (let i = 0; i < count; i++) {
-    const a1 = (i / count) * Math.PI * 2;
-    const a2 = ((i + 0.5) / count) * Math.PI * 2;
-    const a3 = ((i + 1) / count) * Math.PI * 2;
-    const x1 = cx + r1 * Math.cos(a1);
-    const y1 = cy + r1 * Math.sin(a1);
-    const x2 = cx + r2 * Math.cos(a2);
-    const y2 = cy + r2 * Math.sin(a2);
-    const x3 = cx + r1 * Math.cos(a3);
-    const y3 = cy + r1 * Math.sin(a3);
-    paths += `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x3.toFixed(1)},${y3.toFixed(1)}" fill="${color}" opacity="0.85"/>`;
-  }
-  return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;overflow:visible">${paths}</svg>`;
+  const spikeGroups = [
+    // TOP EDGE — cluster of 3 asymmetric spikes
+    { bx: 50, by: cardY1, dir: -1, axis: 'y', count: 3, spread: 12 },
+    // BOTTOM EDGE — 3 spikes
+    { bx: 50, by: cardY2, dir: 1, axis: 'y', count: 3, spread: 10 },
+    // LEFT EDGE — 2 spikes
+    { bx: cardX1, by: 50, dir: -1, axis: 'x', count: 2, spread: 8 },
+    // RIGHT EDGE — 2 spikes
+    { bx: cardX2, by: 50, dir: 1, axis: 'x', count: 2, spread: 8 },
+    // CORNERS — single sharp diagonal spike each
+    { bx: cardX1, by: cardY1, dir: -1, axis: 'd', count: 1, spread: 0 },
+    { bx: cardX2, by: cardY1, dir: 1, axis: 'd', count: 1, spread: 0 },
+    { bx: cardX1, by: cardY2, dir: -1, axis: 'd2', count: 1, spread: 0 },
+    { bx: cardX2, by: cardY2, dir: 1, axis: 'd2', count: 1, spread: 0 },
+  ];
+
+  // Seeded pseudo-random for consistent shape across re-renders
+  const rng = (seed) => ((Math.sin(seed * 127.1 + 311.7) * 43758.5453) % 1 + 1) % 1;
+
+  spikeGroups.forEach((grp, gi) => {
+    for (let i = 0; i < grp.count; i++) {
+      const off = (i - (grp.count - 1) / 2) * grp.spread;
+      const variance = rng(gi * 10 + i) * reach * 0.4;
+      const spikeReach = reach + variance;
+      const spikeWidth = (2.5 + rng(gi * 7 + i) * 3) * scale;
+      const lean = (rng(gi * 13 + i) - 0.5) * reach * 0.3;
+
+      let tipX, tipY, base1X, base1Y, base2X, base2Y;
+
+      if (grp.axis === 'y') {
+        tipX = grp.bx + off + lean;
+        tipY = grp.by + grp.dir * spikeReach;
+        base1X = grp.bx + off - spikeWidth;
+        base1Y = grp.by + grp.dir * 2;
+        base2X = grp.bx + off + spikeWidth;
+        base2Y = grp.by + grp.dir * 2;
+      } else if (grp.axis === 'x') {
+        tipX = grp.bx + grp.dir * spikeReach;
+        tipY = grp.by + off + lean;
+        base1X = grp.bx + grp.dir * 2;
+        base1Y = grp.by + off - spikeWidth;
+        base2X = grp.bx + grp.dir * 2;
+        base2Y = grp.by + off + spikeWidth;
+      } else if (grp.axis === 'd') {
+        tipX = grp.bx - spikeReach * 0.7;
+        tipY = grp.by - spikeReach * 0.7;
+        base1X = grp.bx + 2;
+        base1Y = grp.by - spikeWidth;
+        base2X = grp.bx - spikeWidth;
+        base2Y = grp.by + 2;
+      } else { // d2
+        tipX = grp.bx + grp.dir * spikeReach * 0.7;
+        tipY = grp.by + spikeReach * 0.7;
+        base1X = grp.bx + grp.dir * 2;
+        base1Y = grp.by - spikeWidth;
+        base2X = grp.bx + grp.dir * spikeWidth;
+        base2Y = grp.by + 2;
+      }
+
+      // Apply rotation around center
+      const rotPt = (x, y) => {
+        const dx = x - cx, dy = y - cy;
+        return [
+          cx + dx * Math.cos(rot) - dy * Math.sin(rot),
+          cy + dx * Math.sin(rot) + dy * Math.cos(rot)
+        ];
+      };
+      const [tx, ty] = rotPt(tipX, tipY);
+      const [b1x, b1y] = rotPt(base1X, base1Y);
+      const [b2x, b2y] = rotPt(base2X, base2Y);
+
+      const alpha = 0.7 + rng(gi * 17 + i) * 0.3;
+      paths += `<polygon 
+        points="${b1x.toFixed(2)},${b1y.toFixed(2)} ${tx.toFixed(2)},${ty.toFixed(2)} ${b2x.toFixed(2)},${b2y.toFixed(2)}"
+        fill="${color}" opacity="${alpha.toFixed(2)}"
+        filter="url(#spikeGlow)"
+      />`;
+    }
+  });
+
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+    <defs>
+      <filter id="spikeGlow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="1.5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    ${paths}
+  </svg>`;
 }
 
-// Sparkle effect — floating glitter particles around the card
+// Sparkle effect — floating glitter particles, runs on the dedicated sparkle-canvas
 let sparkleAnimId = null;
 function runSparkleEffect(canvas, color, intensity) {
   if (sparkleAnimId) { cancelAnimationFrame(sparkleAnimId); sparkleAnimId = null; }
-  if (intensity < 0.05) return;
+  if (!canvas) return;
 
-  const parent = canvas.parentElement;
-  if (!parent) return;
-  const rect = parent.getBoundingClientRect();
-  const w = rect.width || 200;
-  const h = rect.height || 200;
+  // Size canvas to its actual rendered size
+  const w = canvas.offsetWidth || 400;
+  const h = canvas.offsetHeight || 400;
   canvas.width = w;
   canvas.height = h;
+
+  if (intensity < 0.05) return;
   const ctx = canvas.getContext('2d');
 
-  // Parse hex color to rgb
   const r = parseInt(color.slice(1,3),16)||212;
   const g = parseInt(color.slice(3,5),16)||160;
   const b = parseInt(color.slice(5,7),16)||23;
 
-  const count = Math.floor(intensity * 18) + 4;
+  const count = Math.floor(intensity * 22) + 6;
   const sparks = Array.from({length: count}, () => ({
-    x: Math.random() * w,
-    y: Math.random() * h,
-    size: Math.random() * 2.5 + 0.5,
-    speed: Math.random() * 0.4 + 0.1,
-    phase: Math.random() * Math.PI * 2,
-    drift: (Math.random() - 0.5) * 0.3,
+    x: Math.random() * w, y: Math.random() * h,
+    size: Math.random() * 3 + 0.8,
+    speed: Math.random() * 0.5 + 0.15,
+    drift: (Math.random() - 0.5) * 0.4,
     life: Math.random()
   }));
 
   function draw() {
     ctx.clearRect(0, 0, w, h);
     sparks.forEach(s => {
-      s.life += s.speed * 0.015;
-      if (s.life > 1) {
-        s.life = 0;
-        s.x = Math.random() * w;
-        s.y = Math.random() * h;
-      }
-      s.x += s.drift;
-      s.y -= s.speed * 0.5;
-      if (s.x < 0) s.x = w; if (s.x > w) s.x = 0;
-      if (s.y < 0) s.y = h;
+      s.life += s.speed * 0.012;
+      if (s.life > 1) { s.life = 0; s.x = Math.random() * w; s.y = Math.random() * h; }
+      s.x += s.drift; s.y -= s.speed * 0.6;
+      if (s.x < 0) s.x = w; if (s.x > w) s.x = 0; if (s.y < 0) s.y = h;
 
-      const alpha = Math.sin(s.life * Math.PI) * intensity * 0.9;
+      const alpha = Math.sin(s.life * Math.PI) * intensity * 0.95;
       const sz = s.size * Math.sin(s.life * Math.PI);
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.shadowBlur = sz * 4;
-      ctx.shadowColor = `rgba(${r},${g},${b},0.8)`;
-      // Draw 4-point star
+      ctx.shadowBlur = sz * 5;
+      ctx.shadowColor = `rgba(${r},${g},${b},0.9)`;
       ctx.translate(s.x, s.y);
+      // 4-point star shape
       ctx.beginPath();
       for (let i = 0; i < 4; i++) {
-        const angle = (i / 4) * Math.PI * 2;
-        const inner = sz * 0.2;
-        const outer = sz;
-        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
-        ctx.lineTo(Math.cos(angle + Math.PI/4) * inner, Math.sin(angle + Math.PI/4) * inner);
+        const ang = (i / 4) * Math.PI * 2;
+        ctx.lineTo(Math.cos(ang) * sz, Math.sin(ang) * sz);
+        ctx.lineTo(Math.cos(ang + Math.PI/4) * sz * 0.2, Math.sin(ang + Math.PI/4) * sz * 0.2);
       }
       ctx.closePath();
       ctx.fill();
