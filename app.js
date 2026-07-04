@@ -70,18 +70,16 @@ function applySkinToElement(el, skin) {
   if (frame) frame.classList.toggle('sce-frame-animated', !!skin.frameAnimated);
 }
 function renderCardHTML({ id, name, imageUrl, priceLabel, emoji, skinId }) {
-  return \`<div class="stash-card-engine" id="sce-\${id}" data-skin="\${skinId||'default'}">
-    <div class="sce-layer-bg"></div>
-    <div class="sce-layer-asset" style="position:absolute;inset:8%;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);font-size:38px;z-index:2">
-      \${imageUrl ? \`<img src="\${imageUrl}" style="width:100%;height:100%;object-fit:cover">\` : (emoji||'📦')}
-    </div>
-    <div class="sce-layer-frame"></div>
-    <div class="sce-layer-breakout"><div class="sce-breakout-spikes"></div></div>
-    <div class="sce-layer-footer">
-      <div class="sce-footer-name">\${name||''}</div>
-      <div class="sce-footer-value">\${priceLabel||''}</div>
-    </div>
-  </div>\`;
+  const img = imageUrl ? '<img src="' + imageUrl + '" style="width:100%;height:100%;object-fit:cover">' : (emoji || '📦');
+  return '<div class="stash-card-engine" id="sce-' + id + '" data-skin="' + (skinId||'default') + '">' +
+    '<div class="sce-layer-bg"></div>' +
+    '<div class="sce-layer-asset" style="position:absolute;inset:8%;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.04);font-size:38px;z-index:2">' + img + '</div>' +
+    '<div class="sce-layer-frame"></div>' +
+    '<div class="sce-layer-breakout"><div class="sce-breakout-spikes"></div></div>' +
+    '<div class="sce-layer-footer">' +
+    '<div class="sce-footer-name">' + (name||'') + '</div>' +
+    '<div class="sce-footer-value">' + (priceLabel||'') + '</div>' +
+    '</div></div>';
 }
 function mountCard(id, skinId) {
   const el = document.getElementById('sce-' + id);
