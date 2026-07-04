@@ -2026,85 +2026,245 @@ function hexToRgba(hex, alpha) {
 // this is the "instant repaint" requirement, driven entirely by reading
 // the form and writing CSS custom properties, no rebuild of the DOM.
 function updatePreview() {
-  // Update readout labels
-  const vals = {
-    valGlowIntensity: 'skinGlowIntensity',
-    valGlowSpeed: 'skinGlowSpeed',
-    valFrameWidth: 'skinFrameWidth',
-    valBreakoutOffset: 'skinBreakoutOffset',
-    valBreakoutScale: 'skinBreakoutScale',
-    valBleedRotation: 'skinBleedRotation',
-    valBreakoutSpeed: 'skinBreakoutSpeed'
+  // Update readout labels with units
+  const labelMap = {
+    valGlowIntensity: ['skinGlowIntensity', ''],
+    valGlowSpeed: ['skinGlowSpeed', 's'],
+    valFrameWidth: ['skinFrameWidth', 'px'],
+    valBreakoutOffset: ['skinBreakoutOffset', 'px'],
+    valBreakoutScale: ['skinBreakoutScale', 'x'],
+    valBleedRotation: ['skinBleedRotation', '°'],
+    valBreakoutSpeed: ['skinBreakoutSpeed', 's']
   };
-  Object.entries(vals).forEach(([labelId, inputId]) => {
-    const el = document.getElementById(inputId);
+  Object.entries(labelMap).forEach(([labelId, [inputId, unit]]) => {
+    const input = document.getElementById(inputId);
     const label = document.getElementById(labelId);
-    if (el && label) label.textContent = el.value;
+    if (input && label) label.textContent = parseFloat(input.value).toFixed(
+      unit === 'px' || unit === '°' ? 0 : unit === 'x' ? 2 : 1
+    ) + unit;
   });
 
   const config = readSkinFormConfig();
-
-  // Show/dim breakout panel based on tier
-  const breakoutPanel = document.getElementById('breakoutPanel');
-  if (breakoutPanel) breakoutPanel.style.opacity = config.tier === 'mythic' ? '1' : '0.4';
-
   const previewEl = document.getElementById('sce-preview');
   if (!previewEl) return;
 
-  // Write every config value as a CSS custom property directly on the element
   previewEl.dataset.tier = config.tier;
 
-  const cssMap = {
+  // ── Batch write all CSS vars ──
+  const cssVars = {
     '--glow-color': config.glowColor,
     '--glow-intensity': config.glowIntensity,
     '--glow-speed': config.glowSpeed + 's',
     '--frame-color': config.frameColor,
-    '--frame-width': config.frameWidth + 'px',
-    '--frame-color-1': config.frameColor1,
+    '--frame-color-1': config.frameColor1 || config.frameColor,
     '--frame-color-2': config.frameColor2,
     '--frame-color-3': config.frameColor3,
-    '--gradient-speed': (config.gradientSpeed || 6) + 's',
-    '--frame-shadow-blur': '20px',
-    '--frame-shadow-spread': '0px',
+    '--gradient-speed': '5s',
+    '--frame-shadow-blur': (config.frameWidth * 4) + 'px',
     '--breakout-offset': config.breakoutOffset + 'px',
     '--breakout-scale': config.breakoutScale,
-    '--breakout-opacity': config.breakoutOpacity || 0.85,
+    '--breakout-opacity': 0.9,
     '--breakout-speed': config.breakoutSpeed + 's',
     '--bleed-rotation': config.bleedRotation + 'deg',
     '--badge-bg': config.badgeBg,
     '--badge-border': config.badgeBorder,
     '--badge-color': config.badgeColor
   };
+  Object.entries(cssVars).forEach(([k, v]) => previewEl.style.setProperty(k, v));
 
-  // Single batched write — no layout reads interleaved
-  Object.entries(cssMap).forEach(([prop, val]) => {
-    previewEl.style.setProperty(prop, val);
-  });
-
-  // Update frame layer classes
+  // ── Frame layer — override inline style completely ──
   const frameLayer = previewEl.querySelector('.sce-layer-frame');
   if (frameLayer) {
     frameLayer.classList.toggle('sce-frame-animated', !!config.frameAnimated);
+    if (config.frameAnimated) {
+      // Animated holo gradient border
+      frameLayer.style.cssText = `
+        position:absolute; inset:0; border-radius:16px; pointer-events:none; z-index:3;
+        background: linear-gradient(${config.bleedRotation || 120}deg,
+          ${config.frameColor1||config.frameColor},
+          ${config.frameColor2},
+          ${config.frameColor3},
+          ${config.frameColor1||config.frameColor}
+        );
+        background-size: 300% 300%;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude;
+        padding: ${config.frameWidth}px;
+        animation: sce-gradient-shift 5s ease infinite;
+        box-shadow: 0 0 ${config.frameWidth * 6}px ${config.frameColor};
+      `;
+    } else {
+      frameLayer.style.cssText = `
+        position:absolute; inset:0; border-radius:16px; pointer-events:none; z-index:3;
+        border: ${config.frameWidth}px solid ${config.frameColor};
+        box-shadow: 0 0 ${config.frameWidth * 5}px ${config.frameColor},
+                    inset 0 0 ${config.frameWidth * 3}px rgba(255,255,255,0.05);
+        animation: none; background: none; padding: 0;
+      `;
+    }
   }
 
-  // Show/hide breakout layer for mythic
-  const breakoutLayer = previewEl.querySelector('.sce-layer-breakout');
-  if (breakoutLayer) breakoutLayer.style.display = config.tier === 'mythic' ? 'block' : 'none';
+  // ── Glow bg layer ──
+  const bgLayer = previewEl.querySelector('.sce-layer-bg');
+  if (bgLayer) {
+    bgLayer.style.cssText = `
+      position:absolute; inset:-20%; border-radius:50%; pointer-events:none; z-index:1;
+      background: radial-gradient(ellipse 70% 70% at 50% 50%, ${config.glowColor} 0%, transparent 70%);
+      opacity: ${config.glowIntensity};
+      filter: blur(20px);
+      animation: sce-breathe ${config.glowSpeed}s ease-in-out infinite;
+    `;
+  }
 
-  // Badge
+  // ── Sparkle layer — always present, intensity driven by glow intensity ──
+  let sparkleCanvas = previewEl.querySelector('.sce-sparkle-canvas');
+  if (!sparkleCanvas) {
+    sparkleCanvas = document.createElement('canvas');
+    sparkleCanvas.className = 'sce-sparkle-canvas';
+    sparkleCanvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;border-radius:16px;overflow:visible;width:100%;height:100%';
+    previewEl.appendChild(sparkleCanvas);
+  }
+  runSparkleEffect(sparkleCanvas, config.glowColor, config.glowIntensity);
+
+  // ── Mythic breakout — visual spike ring ──
+  const breakoutLayer = previewEl.querySelector('.sce-layer-breakout');
+  const spikes = previewEl.querySelector('.sce-breakout-spikes');
+  if (breakoutLayer && spikes) {
+    if (config.tier === 'mythic') {
+      breakoutLayer.style.display = 'block';
+      const offset = config.breakoutOffset;
+      const scale = config.breakoutScale;
+      const rot = config.bleedRotation;
+      const color = config.glowColor;
+      spikes.style.cssText = `
+        position:absolute;
+        inset: -${offset}px;
+        pointer-events:none;
+        opacity: 0.9;
+        transform: scale(${scale}) rotate(${rot}deg);
+        filter: drop-shadow(0 0 8px ${color});
+        animation: sce-breakout-pulse ${config.breakoutSpeed}s ease-in-out infinite;
+        background: none;
+      `;
+      // Draw spike SVG pattern
+      spikes.innerHTML = generateSpikesSVG(color, offset);
+    } else {
+      breakoutLayer.style.display = 'none';
+      spikes.innerHTML = '';
+    }
+  }
+
+  // ── Badge ──
   const badge = document.getElementById('previewBadge');
   if (badge) {
     if (config.badgeLabel && config.tier !== 'standard') {
-      badge.style.display = 'block';
+      badge.style.cssText = `display:block;position:absolute;top:8px;right:8px;z-index:6;
+        font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
+        padding:3px 8px;border-radius:6px;
+        background:${config.badgeBg};border:1px solid ${config.badgeBorder};color:${config.badgeColor};`;
       badge.textContent = config.badgeLabel;
     } else {
       badge.style.display = 'none';
     }
   }
 
-  // Update price color to match glow
+  // ── Price color ──
   const price = document.getElementById('previewPrice');
   if (price) price.style.color = config.glowColor;
+
+  updateJSONDock();
+}
+
+// Generates a ring of SVG spikes around the card
+function generateSpikesSVG(color, offset) {
+  const count = 24;
+  const cx = 50, cy = 50;
+  const r1 = 50, r2 = 50 + (offset / 2.2);
+  let paths = '';
+  for (let i = 0; i < count; i++) {
+    const a1 = (i / count) * Math.PI * 2;
+    const a2 = ((i + 0.5) / count) * Math.PI * 2;
+    const a3 = ((i + 1) / count) * Math.PI * 2;
+    const x1 = cx + r1 * Math.cos(a1);
+    const y1 = cy + r1 * Math.sin(a1);
+    const x2 = cx + r2 * Math.cos(a2);
+    const y2 = cy + r2 * Math.sin(a2);
+    const x3 = cx + r1 * Math.cos(a3);
+    const y3 = cy + r1 * Math.sin(a3);
+    paths += `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x3.toFixed(1)},${y3.toFixed(1)}" fill="${color}" opacity="0.85"/>`;
+  }
+  return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;overflow:visible">${paths}</svg>`;
+}
+
+// Sparkle effect — floating glitter particles around the card
+let sparkleAnimId = null;
+function runSparkleEffect(canvas, color, intensity) {
+  if (sparkleAnimId) { cancelAnimationFrame(sparkleAnimId); sparkleAnimId = null; }
+  if (intensity < 0.05) return;
+
+  const parent = canvas.parentElement;
+  if (!parent) return;
+  const rect = parent.getBoundingClientRect();
+  const w = rect.width || 200;
+  const h = rect.height || 200;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  // Parse hex color to rgb
+  const r = parseInt(color.slice(1,3),16)||212;
+  const g = parseInt(color.slice(3,5),16)||160;
+  const b = parseInt(color.slice(5,7),16)||23;
+
+  const count = Math.floor(intensity * 18) + 4;
+  const sparks = Array.from({length: count}, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    size: Math.random() * 2.5 + 0.5,
+    speed: Math.random() * 0.4 + 0.1,
+    phase: Math.random() * Math.PI * 2,
+    drift: (Math.random() - 0.5) * 0.3,
+    life: Math.random()
+  }));
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    sparks.forEach(s => {
+      s.life += s.speed * 0.015;
+      if (s.life > 1) {
+        s.life = 0;
+        s.x = Math.random() * w;
+        s.y = Math.random() * h;
+      }
+      s.x += s.drift;
+      s.y -= s.speed * 0.5;
+      if (s.x < 0) s.x = w; if (s.x > w) s.x = 0;
+      if (s.y < 0) s.y = h;
+
+      const alpha = Math.sin(s.life * Math.PI) * intensity * 0.9;
+      const sz = s.size * Math.sin(s.life * Math.PI);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.shadowBlur = sz * 4;
+      ctx.shadowColor = `rgba(${r},${g},${b},0.8)`;
+      // Draw 4-point star
+      ctx.translate(s.x, s.y);
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const inner = sz * 0.2;
+        const outer = sz;
+        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+        ctx.lineTo(Math.cos(angle + Math.PI/4) * inner, Math.sin(angle + Math.PI/4) * inner);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+    sparkleAnimId = requestAnimationFrame(draw);
+  }
+  draw();
 }
 
 async function saveCurrentSkin() {
