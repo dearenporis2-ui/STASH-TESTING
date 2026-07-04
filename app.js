@@ -5,6 +5,20 @@
 
 import { auth, db } from './firebase.js';
 import { openUploadWidget } from './cloudinary.js';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
+  collection, query, where, orderBy, limit,
+  onSnapshot, getDocs, serverTimestamp, increment, arrayUnion
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getFunctions, httpsCallable
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
 // ── Card Engine (inlined — avoids module path issues on GitHub Pages) ──
 const DEFAULT_SKIN = {
   id: 'default', name: 'Default', tier: 'standard',
@@ -73,20 +87,7 @@ function mountCard(id, skinId) {
   const el = document.getElementById('sce-' + id);
   if (el) applySkinToElement(el, getSkin(skinId||'default'));
 }
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
-  collection, query, where, orderBy, limit,
-  onSnapshot, getDocs, serverTimestamp, increment, arrayUnion
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import {
-  getFunctions, httpsCallable
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+
 
 const functions = getFunctions();
 
